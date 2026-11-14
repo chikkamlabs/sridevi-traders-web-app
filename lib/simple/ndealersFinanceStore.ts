@@ -107,11 +107,11 @@ function updateLocalDealerBalanceByTaxMode(
       ...current,
       gst_balance:
         taxMode === 'gst'
-          ? Number(current.gst_balance || 0) + amount
+          ? Number(current.gst_balance || 0) - amount
           : Number(current.gst_balance || 0),
       n_gst_balance:
         taxMode === 'n_gst'
-          ? Number(current.n_gst_balance || 0) + amount
+          ? Number(current.n_gst_balance || 0) - amount
           : Number(current.n_gst_balance || 0),
       updated_at: new Date().toISOString(),
     };
@@ -120,8 +120,8 @@ function updateLocalDealerBalanceByTaxMode(
       id: 'bal-' + Math.random().toString(36).substring(2, 9),
       firm_id: firmId,
       dealer_id: dealerId,
-      gst_balance: taxMode === 'gst' ? amount : 0,
-      n_gst_balance: taxMode === 'n_gst' ? amount : 0,
+      gst_balance: taxMode === 'gst' ? -amount : 0,
+      n_gst_balance: taxMode === 'n_gst' ? -amount : 0,
       updated_at: new Date().toISOString(),
     });
   }
@@ -258,7 +258,7 @@ export async function getSimpleDealerTransactions(
 
 /**
  * Insert a record into dealer_transactions and update firm_dealer_balances.gst_balance (if tax_mode = gst)
- * or firm_dealer_balances.n_gst_balance (if tax_mode = n_gst) by adding the entered amount.
+ * or firm_dealer_balances.n_gst_balance (if tax_mode = n_gst) by subtracting the entered amount.
  */
 export async function addSimpleDealerTransactionAndUpdateBalance(
   input: AddSimpleDealerTransactionInput
@@ -329,11 +329,11 @@ export async function addSimpleDealerTransactionAndUpdateBalance(
           const updateFields =
             input.tax_mode === 'gst'
               ? {
-                  gst_balance: Number(existing.gst_balance || 0) + amountNum,
+                  gst_balance: Number(existing.gst_balance || 0) - amountNum,
                   updated_at: nowIso,
                 }
               : {
-                  n_gst_balance: Number(existing.n_gst_balance || 0) + amountNum,
+                  n_gst_balance: Number(existing.n_gst_balance || 0) - amountNum,
                   updated_at: nowIso,
                 };
 
@@ -352,8 +352,8 @@ export async function addSimpleDealerTransactionAndUpdateBalance(
               {
                 firm_id: input.firm_id,
                 dealer_id: input.dealer_id,
-                gst_balance: input.tax_mode === 'gst' ? amountNum : 0,
-                n_gst_balance: input.tax_mode === 'n_gst' ? amountNum : 0,
+                gst_balance: input.tax_mode === 'gst' ? -amountNum : 0,
+                n_gst_balance: input.tax_mode === 'n_gst' ? -amountNum : 0,
               },
             ]);
 
