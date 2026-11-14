@@ -12,6 +12,7 @@ import {
   Truck,
   ShoppingCart,
   TrendingUp,
+  ArrowLeftRight,
   User,
   X,
 } from 'lucide-react';
@@ -29,9 +30,10 @@ const navItems = [
   { name: 'Store Products', href: '/admin/products', icon: Package },
   { name: 'Dealers', href: '/admin/dealers', icon: Users },
   { name: 'Suppliers', href: '/admin/suppliers', icon: Truck },
-  { name: 'Purchases', href: '/admin/dashboard', icon: ShoppingCart },
-  { name: 'Sales', href: '/admin/dashboard', icon: TrendingUp },
-  { name: 'Profile', href: '/admin/dashboard', icon: User },
+  { name: 'Purchases', href: '/admin/purchases', icon: ShoppingCart },
+  { name: 'Sales', href: '/admin/sales', icon: TrendingUp },
+  { name: 'Stock Movements', href: '/admin/stockmovements', icon: ArrowLeftRight },
+  { name: 'Profile', href: '/admin/profile', icon: User },
 ];
 
 export default function AdminSidebar({ isOpen, onClose }: SidebarProps) {
