@@ -23,6 +23,7 @@ export interface SimplePurchaseItem {
   n_gst_total_price: number;
   product_name?: string;
   product_code?: string;
+  hsn_code?: string;
   variant_name?: string;
   variant_code?: string;
   base_unit_name?: string;
@@ -253,7 +254,7 @@ export async function getSimplePurchaseById(id: string): Promise<SimplePurchase 
             n_gst_total_price,
             created_at,
             updated_at,
-            products ( name, product_code, units ( name ) ),
+            products ( name, product_code, hsn_code, units ( name ) ),
             product_variants ( variant_name, variant_code )
           `)
           .eq('purchase_id', id)
@@ -278,6 +279,7 @@ export async function getSimplePurchaseById(id: string): Promise<SimplePurchase 
           n_gst_total_price: Number(item.n_gst_total_price || 0),
           product_name: item.products?.name || 'Product',
           product_code: item.products?.product_code || '',
+          hsn_code: item.products?.hsn_code || '',
           variant_name: item.product_variants?.variant_name || 'Variant',
           variant_code: item.product_variants?.variant_code || '',
           base_unit_name: item.products?.units?.name || '',
@@ -337,6 +339,7 @@ export async function getSimplePurchaseById(id: string): Promise<SimplePurchase 
         ...item,
         product_name: prod?.name || item.product_name || 'Product',
         product_code: prod?.product_code || item.product_code || '',
+        hsn_code: prod?.hsn_code || item.hsn_code || '',
         variant_name: variant?.variant_name || item.variant_name || 'Variant',
         variant_code: variant?.variant_code || item.variant_code || '',
         base_unit_name: prod?.unit_name || item.base_unit_name || '',
