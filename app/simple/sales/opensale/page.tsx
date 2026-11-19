@@ -235,6 +235,7 @@ function SimpleOpenSaleContent() {
         return {
           product_name: item.product_name || item.product_id,
           product_code: item.product_code || '',
+          hsn_code: item.hsn_code || '',
           variant_name: item.variant_name || item.product_variant_id,
           variant_code: item.variant_code || '',
           quantity: item.quantity,
@@ -517,6 +518,7 @@ function SimpleOpenSaleContent() {
                     <table className="w-full text-left text-xs sm:text-sm">
                       <thead className="bg-[var(--color-surface-hover)] border-b border-[var(--color-border)] text-[11px] uppercase tracking-wider text-[var(--color-text-secondary)] font-semibold">
                         <tr>
+                          <th className="py-3 px-4">HSN Code</th>
                           <th className="py-3 px-4">Product</th>
                           <th className="py-3 px-4">Variant</th>
                           <th className="py-3 px-4 text-right">Qty</th>
@@ -535,7 +537,7 @@ function SimpleOpenSaleContent() {
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {!sale.items || sale.items.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={14} className="py-10 text-center text-[var(--color-text-muted)]">
                               No items found for this sale bill.
                             </td>
                           </tr>
@@ -552,6 +554,10 @@ function SimpleOpenSaleContent() {
                                 key={item.id}
                                 className="hover:bg-[var(--color-surface-hover)] transition-colors"
                               >
+                                <td className="py-3.5 px-4 font-mono text-xs text-[var(--color-text-secondary)]">
+                                  {item.hsn_code || '—'}
+                                </td>
+
                                 <td className="py-3.5 px-4">
                                   <div className="font-medium text-[var(--color-text-primary)]">
                                     {item.product_name || item.product_id}
