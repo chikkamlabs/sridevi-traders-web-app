@@ -57,6 +57,7 @@ export interface Purchase {
   gst_subtotal: number;
   n_gst_subtotal: number;
   tax_amount: number;
+  extra_charges: number;
   gst_total: number;
   n_gst_total: number;
   grand_total: number;
@@ -79,6 +80,7 @@ export interface PurchaseInput {
   gst_subtotal: number;
   n_gst_subtotal?: number;
   tax_amount: number;
+  extra_charges?: number;
   gst_total: number;
   n_gst_total?: number;
   grand_total?: number;
@@ -157,6 +159,7 @@ export async function getPurchases(options?: {
           gst_subtotal,
           n_gst_subtotal,
           tax_amount,
+          extra_charges,
           gst_total,
           n_gst_total,
           grand_total,
@@ -190,6 +193,7 @@ export async function getPurchases(options?: {
           gst_subtotal: Number(row.gst_subtotal || 0),
           n_gst_subtotal: Number(row.n_gst_subtotal || 0),
           tax_amount: Number(row.tax_amount || 0),
+          extra_charges: Number(row.extra_charges || 0),
           gst_total: Number(row.gst_total || 0),
           n_gst_total: Number(row.n_gst_total || 0),
           grand_total: Number(row.grand_total || 0),
@@ -257,6 +261,7 @@ export async function getPurchaseById(id: string): Promise<Purchase | null> {
           gst_subtotal,
           n_gst_subtotal,
           tax_amount,
+          extra_charges,
           gst_total,
           n_gst_total,
           grand_total,
@@ -335,6 +340,7 @@ export async function getPurchaseById(id: string): Promise<Purchase | null> {
           gst_subtotal: Number(p.gst_subtotal || 0),
           n_gst_subtotal: Number(p.n_gst_subtotal || 0),
           tax_amount: Number(p.tax_amount || 0),
+          extra_charges: Number(p.extra_charges || 0),
           gst_total: Number(p.gst_total || 0),
           n_gst_total: Number(p.n_gst_total || 0),
           grand_total: Number(p.grand_total || 0),
@@ -418,6 +424,7 @@ export async function addPurchase(
     purchaseInput.purchase_number?.trim() || generatePurchaseNumber();
   const gstSubtotal = Number(purchaseInput.gst_subtotal || 0);
   const taxAmount = Number(purchaseInput.tax_amount || 0);
+  const extraCharges = Number(purchaseInput.extra_charges || 0);
   const gstTotal = Number(purchaseInput.gst_total || 0);
   const grandTotal =
     purchaseInput.grand_total !== undefined
@@ -437,6 +444,7 @@ export async function addPurchase(
     gst_subtotal: gstSubtotal,
     n_gst_subtotal: Number(purchaseInput.n_gst_subtotal || 0),
     tax_amount: taxAmount,
+    extra_charges: extraCharges,
     gst_total: gstTotal,
     n_gst_total: Number(purchaseInput.n_gst_total || 0),
     grand_total: grandTotal,
@@ -499,6 +507,7 @@ export async function addPurchase(
         gst_subtotal: Number(createdPurchase.gst_subtotal),
         n_gst_subtotal: Number(createdPurchase.n_gst_subtotal),
         tax_amount: Number(createdPurchase.tax_amount),
+        extra_charges: Number(createdPurchase.extra_charges || 0),
         gst_total: Number(createdPurchase.gst_total),
         n_gst_total: Number(createdPurchase.n_gst_total),
         grand_total: Number(createdPurchase.grand_total),

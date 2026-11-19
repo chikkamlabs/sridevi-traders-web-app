@@ -12,6 +12,7 @@ export interface Product {
   id: string;
   name: string;
   product_code: string;
+  hsn_code?: string | null;
   category_id: string;
   base_unit_id: string;
   minimum_stock: number;
@@ -26,6 +27,7 @@ export interface Product {
 
 export interface ProductInput {
   name: string;
+  hsn_code?: string;
   category_id: string;
   base_unit_id: string;
   minimum_stock: number;
@@ -118,6 +120,7 @@ export async function getProducts(options?: {
           id,
           name,
           product_code,
+          hsn_code,
           category_id,
           base_unit_id,
           minimum_stock,
@@ -142,6 +145,7 @@ export async function getProducts(options?: {
           id: item.id,
           name: item.name,
           product_code: item.product_code,
+          hsn_code: item.hsn_code || '',
           category_id: item.category_id,
           base_unit_id: item.base_unit_id,
           minimum_stock: Number(item.minimum_stock),
@@ -170,13 +174,14 @@ export async function getProducts(options?: {
     productsList = productsList.filter((p) => p.category_id === options.categoryId);
   }
 
-  // Search filtering by product_code and name
+  // Search filtering by product_code, hsn_code, and name
   if (options?.search) {
     const s = options.search.trim().toLowerCase();
     productsList = productsList.filter(
       (p) =>
         p.name.toLowerCase().includes(s) ||
-        p.product_code.toLowerCase().includes(s)
+        p.product_code.toLowerCase().includes(s) ||
+        (p.hsn_code && p.hsn_code.toLowerCase().includes(s))
     );
   }
 
@@ -205,6 +210,7 @@ export async function getProductById(id: string): Promise<Product | null> {
           id,
           name,
           product_code,
+          hsn_code,
           category_id,
           base_unit_id,
           minimum_stock,
@@ -224,6 +230,7 @@ export async function getProductById(id: string): Promise<Product | null> {
           id: item.id,
           name: item.name,
           product_code: item.product_code,
+          hsn_code: item.hsn_code || '',
           category_id: item.category_id,
           base_unit_id: item.base_unit_id,
           minimum_stock: Number(item.minimum_stock),
@@ -288,6 +295,7 @@ export async function addProduct(
           {
             name: cleanName,
             product_code,
+            hsn_code: input.hsn_code?.trim() || null,
             category_id: input.category_id,
             base_unit_id: input.base_unit_id,
             minimum_stock: input.minimum_stock || 0,
@@ -307,6 +315,7 @@ export async function addProduct(
           id: data.id,
           name: data.name,
           product_code: data.product_code,
+          hsn_code: data.hsn_code || '',
           category_id: data.category_id,
           base_unit_id: data.base_unit_id,
           minimum_stock: Number(data.minimum_stock),
@@ -334,6 +343,7 @@ export async function addProduct(
     id: 'prod-' + Math.random().toString(36).substring(2, 9),
     name: cleanName,
     product_code,
+    hsn_code: input.hsn_code?.trim() || '',
     category_id: input.category_id,
     base_unit_id: input.base_unit_id,
     minimum_stock: Number(input.minimum_stock) || 0,
@@ -366,6 +376,7 @@ export async function updateProduct(
         updated_at: new Date().toISOString(),
       };
       if (updates.name !== undefined) payload.name = updates.name.trim();
+      if (updates.hsn_code !== undefined) payload.hsn_code = updates.hsn_code.trim() || null;
       if (updates.category_id !== undefined) payload.category_id = updates.category_id;
       if (updates.base_unit_id !== undefined) payload.base_unit_id = updates.base_unit_id;
       if (updates.minimum_stock !== undefined) payload.minimum_stock = Number(updates.minimum_stock);
@@ -391,6 +402,7 @@ export async function updateProduct(
           id: data.id,
           name: data.name,
           product_code: data.product_code, // Never edited
+          hsn_code: data.hsn_code || '',
           category_id: data.category_id,
           base_unit_id: data.base_unit_id,
           minimum_stock: Number(data.minimum_stock),
@@ -427,6 +439,7 @@ export async function updateProduct(
       updatedProduct = {
         ...p,
         ...(updates.name !== undefined && { name: updates.name.trim() }),
+        ...(updates.hsn_code !== undefined && { hsn_code: updates.hsn_code.trim() }),
         ...(updates.category_id !== undefined && { category_id: updates.category_id }),
         ...(updates.base_unit_id !== undefined && { base_unit_id: updates.base_unit_id }),
         ...(updates.minimum_stock !== undefined && { minimum_stock: Number(updates.minimum_stock) }),

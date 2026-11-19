@@ -315,3 +315,206 @@ export async function recordPurchaseSupplierTransaction(params: {
 
   return { data: txResult.data, error: null };
 }
+
+export interface SupplierFirmGstBalance {
+  id: string;
+  firm_id: string;
+  firm_name: string;
+  supplier_id: string;
+  gst_balance: number;
+  updated_at?: string;
+}
+
+export interface SupplierTransactionRow extends SupplierTransaction {
+  firm_name?: string;
+}
+
+/**
+ * Fetch all firm_supplier_balances rows for a given supplier_id (gst_balance only).
+ */
+export async function getSupplierGstBalances(
+  supplierId: string
+): Promise<SupplierFirmGstBalance[]> {
+  if (!supplierId) return [];
+
+  const { getFirms } = await import('@/lib/firmsStore');
+  const firms = await getFirms();
+  const firmMap = new Map<string, string>();
+  firms.forEach((f) => firmMap.set(f.id, f.name));
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('firm_supplier_balances')
+        .select(`
+          id,
+          firm_id,
+          supplier_id,
+          gst_balance,
+          updated_at,
+          firms ( name )
+        `)
+        .eq('supplier_id', supplierId);
+
+      if (!error && data) {
+        return data.map((b: any) => ({
+          id: b.id,
+          firm_id: b.firm_id,
+          firm_name: b.firms?.name || firmMap.get(b.firm_id) || 'Firm',
+          supplier_id: b.supplier_id,
+          gst_balance: Number(b.gst_balance || 0),
+          updated_at: b.updated_at,
+        }));
+      }
+    } catch (err) {
+      console.warn('Error fetching firm_supplier_balances from Supabase:', err);
+    }
+  }
+
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_SUPPLIER_BALANCES_KEY);
+    const balances: any[] = raw ? JSON.parse(raw) : [];
+    return balances
+      .filter((b) => b.supplier_id === supplierId)
+      .map((b) => ({
+        id: b.id || `${b.firm_id}_${b.supplier_id}`,
+        firm_id: b.firm_id,
+        firm_name: firmMap.get(b.firm_id) || b.firm_name || 'Firm',
+        supplier_id: b.supplier_id,
+        gst_balance: Number(b.gst_balance || 0),
+        updated_at: b.updated_at,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch all supplier_transactions rows for a given supplier_id where tax_mode = 'gst'.
+ */
+export async function getSupplierGstTransactions(
+  supplierId: string
+): Promise<SupplierTransactionRow[]> {
+  if (!supplierId) return [];
+
+  const { getFirms } = await import('@/lib/firmsStore');
+  const firms = await getFirms();
+  const firmMap = new Map<string, string>();
+  firms.forEach((f) => firmMap.set(f.id, f.name));
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('supplier_transactions')
+        .select(`
+          id,
+          firm_id,
+          supplier_id,
+          transaction_code,
+          transaction_type,
+          payment_method,
+          amount,
+          tax_mode,
+          reference_type,
+          reference_id,
+          notes,
+          transaction_date,
+          created_by,
+          created_at,
+          updated_at,
+          firms ( name )
+        `)
+        .eq('supplier_id', supplierId)
+        .eq('tax_mode', 'gst')
+        .order('transaction_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        return data.map((tx: any) => ({
+          id: tx.id,
+          firm_id: tx.firm_id,
+          firm_name: tx.firms?.name || firmMap.get(tx.firm_id) || 'Firm',
+          supplier_id: tx.supplier_id,
+          transaction_code: tx.transaction_code,
+          transaction_type: tx.transaction_type,
+          payment_method: tx.payment_method,
+          amount: Number(tx.amount || 0),
+          tax_mode: tx.tax_mode,
+          reference_type: tx.reference_type,
+          reference_id: tx.reference_id || null,
+          notes: tx.notes || null,
+          transaction_date: tx.transaction_date,
+          created_by: tx.created_by || null,
+          created_at: tx.created_at,
+          updated_at: tx.updated_at,
+        }));
+      }
+    } catch (err) {
+      console.warn('Error fetching GST supplier_transactions from Supabase:', err);
+    }
+  }
+
+  return getLocalTransactions()
+    .filter((tx) => tx.supplier_id === supplierId && tx.tax_mode === 'gst')
+    .sort((a, b) =>
+      String(b.transaction_date || '').localeCompare(String(a.transaction_date || ''))
+    )
+    .map((tx) => ({
+      ...tx,
+      firm_name: firmMap.get(tx.firm_id) || 'Firm',
+      amount: Number(tx.amount || 0),
+    }));
+}
+
+/**
+ * Insert a record into supplier_transactions with tax_mode = 'gst'
+ * and update firm_supplier_balances.gst_balance = firm_supplier_balances.gst_balance - amount.
+ */
+export async function addSupplierGstTransactionAndUpdateBalance(
+  input: Omit<SupplierTransactionInput, 'tax_mode'>
+): Promise<{ data: SupplierTransaction | null; error: string | null }> {
+  if (!input.firm_id) {
+    return { data: null, error: 'Please select a firm.' };
+  }
+  if (!input.supplier_id) {
+    return { data: null, error: 'Supplier ID is required.' };
+  }
+
+  const amountNum = Number(input.amount);
+  if (isNaN(amountNum) || amountNum <= 0) {
+    return { data: null, error: 'Amount must be greater than 0.' };
+  }
+
+  const txResult = await addSupplierTransaction({
+    ...input,
+    amount: amountNum,
+    tax_mode: 'gst',
+    reference_type: input.reference_type?.trim() || 'manual',
+    reference_id: input.reference_id?.trim() || null,
+  });
+
+  if (txResult.error || !txResult.data) {
+    return {
+      data: null,
+      error: txResult.error || 'Failed to insert supplier transaction.',
+    };
+  }
+
+  const balResult = await incrementFirmSupplierGstBalance(
+    input.firm_id,
+    input.supplier_id,
+    -amountNum
+  );
+
+  if (!balResult.success) {
+    return {
+      data: txResult.data,
+      error:
+        balResult.error ||
+        'Transaction saved, but failed to update supplier GST balance.',
+    };
+  }
+
+  return { data: txResult.data, error: null };
+}

@@ -43,6 +43,7 @@ export default function AddProductPage() {
 
   // Step 1: Product Form State
   const [name, setName] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [baseUnitId, setBaseUnitId] = useState('');
   const [minimumStock, setMinimumStock] = useState<number | string>('10');
@@ -148,6 +149,7 @@ export default function AddProductPage() {
       // Auto-generates product_code as prod_(4 random numbers) and inserts into products table
       const { data, error: addErr } = await addProduct({
         name: cleanName,
+        hsn_code: hsnCode.trim(),
         category_id: categoryId,
         base_unit_id: baseUnitId,
         minimum_stock: minStockNum,
@@ -387,6 +389,22 @@ export default function AddProductPage() {
                       className="input-field text-sm"
                       disabled={isSubmittingProduct}
                       autoFocus
+                    />
+                  </div>
+
+                  {/* HSN Code */}
+                  <div className="form-group mb-0">
+                    <label htmlFor="product-hsn-code" className="form-label">
+                      HSN Code
+                    </label>
+                    <input
+                      id="product-hsn-code"
+                      type="text"
+                      value={hsnCode}
+                      onChange={(e) => setHsnCode(e.target.value)}
+                      placeholder="e.g. 10063020"
+                      className="input-field text-sm font-mono"
+                      disabled={isSubmittingProduct}
                     />
                   </div>
 

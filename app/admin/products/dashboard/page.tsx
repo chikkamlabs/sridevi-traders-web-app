@@ -63,14 +63,15 @@ export default function ProductsDashboardPage() {
     );
   }, [categories, categorySearch]);
 
-  // Filter products by search (code or name) and category
+  // Filter products by search (code, hsn_code, or name) and category
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return products.filter((p) => {
       const matchesSearch =
         !q ||
         p.name.toLowerCase().includes(q) ||
-        p.product_code.toLowerCase().includes(q);
+        p.product_code.toLowerCase().includes(q) ||
+        (p.hsn_code && p.hsn_code.toLowerCase().includes(q));
 
       const matchesCategory =
         !selectedCategory || p.category_id === selectedCategory;
@@ -138,14 +139,14 @@ export default function ProductsDashboardPage() {
             {/* Filters & Search Bar */}
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-[var(--color-brand-white)] p-4 rounded-xl border border-[var(--color-border)] shadow-xs">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
-                {/* Search Bar (product_code, name) */}
+                {/* Search Bar (product_code, hsn_code, name) */}
                 <div className="relative flex-1 max-w-md">
                   <Search className="w-4 h-4 text-[var(--color-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by product code or name..."
+                    placeholder="Search by product code, HSN code, or name..."
                     className="input-field pl-9 text-sm"
                   />
                 </div>
@@ -281,11 +282,16 @@ export default function ProductsDashboardPage() {
                             key={prod.id}
                             className="hover:bg-[var(--color-surface-hover)] transition-colors group"
                           >
-                            {/* Product Code */}
+                            {/* Product Code & HSN Code */}
                             <td className="py-4 px-4 sm:px-6">
-                              <span className="px-2.5 py-1 rounded-md bg-[var(--color-background)] border border-[var(--color-border)] font-mono text-xs font-semibold text-[var(--color-brand-deep-green)]">
-                                {prod.product_code}
-                              </span>
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="px-2.5 py-1 rounded-md bg-[var(--color-background)] border border-[var(--color-border)] font-mono text-xs font-semibold text-[var(--color-brand-deep-green)]">
+                                  {prod.product_code}
+                                </span>
+                                <span className="text-[11px] font-mono text-[var(--color-text-muted)]">
+                                  HSN: {prod.hsn_code || '—'}
+                                </span>
+                              </div>
                             </td>
 
                             {/* Name */}

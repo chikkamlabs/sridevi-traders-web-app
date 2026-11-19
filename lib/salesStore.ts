@@ -22,6 +22,7 @@ export interface SaleBillItem {
   n_gst_total_price: number;
   product_name?: string;
   product_code?: string;
+  hsn_code?: string;
   variant_name?: string;
   variant_code?: string;
   base_unit_name?: string;
@@ -56,14 +57,21 @@ export interface SaleBill {
   n_gst_subtotal: number;
   tax_rate: number;
   tax_amount: number;
+  extra_charges: number;
   gst_total: number;
   n_gst_total: number;
   grand_total: number;
   notes: string | null;
   created_by?: string | null;
   firm_name?: string;
+  firm_gst?: string | null;
+  firm_phone?: string | null;
+  firm_address?: string | null;
   dealer_name?: string;
   dealer_phone?: string | null;
+  dealer_address?: string | null;
+  dealer_city?: string | null;
+  dealer_gst?: string | null;
   items?: SaleBillItem[];
   created_at?: string;
   updated_at?: string;
@@ -79,6 +87,7 @@ export interface SaleBillInput {
   n_gst_subtotal?: number;
   tax_rate?: number;
   tax_amount: number;
+  extra_charges?: number;
   gst_total: number;
   n_gst_total?: number;
   grand_total?: number;
@@ -171,6 +180,7 @@ export async function getSalesBills(options?: {
           n_gst_subtotal,
           tax_rate,
           tax_amount,
+          extra_charges,
           gst_total,
           n_gst_total,
           grand_total,
@@ -205,6 +215,7 @@ export async function getSalesBills(options?: {
           n_gst_subtotal: Number(row.n_gst_subtotal || 0),
           tax_rate: Number(row.tax_rate || 0),
           tax_amount: Number(row.tax_amount || 0),
+          extra_charges: Number(row.extra_charges || 0),
           gst_total: Number(row.gst_total || 0),
           n_gst_total: Number(row.n_gst_total || 0),
           grand_total: Number(row.grand_total || 0),
@@ -273,6 +284,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           n_gst_subtotal,
           tax_rate,
           tax_amount,
+          extra_charges,
           gst_total,
           n_gst_total,
           grand_total,
@@ -280,8 +292,8 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           created_by,
           created_at,
           updated_at,
-          firms ( name ),
-          dealers ( name, phone )
+          firms ( name, gst_number, phone, address ),
+          dealers ( name, phone, address, city, gst_number )
         `)
         .eq('id', id)
         .maybeSingle();
@@ -307,7 +319,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
             n_gst_total_price,
             created_at,
             updated_at,
-            products ( name, product_code, units ( name ) ),
+            products ( name, product_code, hsn_code, units ( name ) ),
             product_variants ( variant_name, variant_code )
           `)
           .eq('sales_bill_id', id)
@@ -331,6 +343,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           n_gst_total_price: Number(item.n_gst_total_price || 0),
           product_name: item.products?.name || 'Product',
           product_code: item.products?.product_code || '',
+          hsn_code: item.products?.hsn_code || '',
           variant_name: item.product_variants?.variant_name || 'Variant',
           variant_code: item.product_variants?.variant_code || '',
           base_unit_name: item.products?.units?.name || '',
@@ -350,14 +363,21 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           n_gst_subtotal: Number(s.n_gst_subtotal || 0),
           tax_rate: Number(s.tax_rate || 0),
           tax_amount: Number(s.tax_amount || 0),
+          extra_charges: Number(s.extra_charges || 0),
           gst_total: Number(s.gst_total || 0),
           n_gst_total: Number(s.n_gst_total || 0),
           grand_total: Number(s.grand_total || 0),
           notes: s.notes || null,
           created_by: s.created_by || null,
           firm_name: s.firms?.name || 'Firm',
+          firm_gst: s.firms?.gst_number || null,
+          firm_phone: s.firms?.phone || null,
+          firm_address: s.firms?.address || null,
           dealer_name: s.dealers?.name || 'Dealer',
           dealer_phone: s.dealers?.phone || null,
+          dealer_address: s.dealers?.address || null,
+          dealer_city: s.dealers?.city || null,
+          dealer_gst: s.dealers?.gst_number || null,
           items: formattedItems,
           created_at: s.created_at,
           updated_at: s.updated_at,
@@ -391,6 +411,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
         ...item,
         product_name: prod?.name || item.product_name || 'Product',
         product_code: prod?.product_code || item.product_code || '',
+        hsn_code: prod?.hsn_code || item.hsn_code || '',
         variant_name: variant?.variant_name || item.variant_name || 'Variant',
         variant_code: variant?.variant_code || item.variant_code || '',
         base_unit_name: prod?.unit_name || item.base_unit_name || '',
@@ -400,8 +421,14 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
   return {
     ...found,
     firm_name: firm?.name || found.firm_name || 'Firm',
+    firm_gst: firm?.gst_number || found.firm_gst || null,
+    firm_phone: firm?.phone || found.firm_phone || null,
+    firm_address: firm?.address || found.firm_address || null,
     dealer_name: dealer?.name || found.dealer_name || 'Dealer',
     dealer_phone: dealer?.phone || found.dealer_phone || null,
+    dealer_address: dealer?.address || found.dealer_address || null,
+    dealer_city: dealer?.city || found.dealer_city || null,
+    dealer_gst: dealer?.gst_number || found.dealer_gst || null,
     items,
   };
 }
@@ -431,6 +458,7 @@ export async function addSaleBill(
     saleInput.invoice_number?.trim() || generateSaleInvoiceNumber();
   const gstSubtotal = Number(saleInput.gst_subtotal || 0);
   const taxAmount = Number(saleInput.tax_amount || 0);
+  const extraCharges = Number(saleInput.extra_charges || 0);
   const gstTotal = Number(saleInput.gst_total || 0);
   const grandTotal =
     saleInput.grand_total !== undefined
@@ -451,6 +479,7 @@ export async function addSaleBill(
     n_gst_subtotal: Number(saleInput.n_gst_subtotal || 0),
     tax_rate: Number(saleInput.tax_rate || 0),
     tax_amount: taxAmount,
+    extra_charges: extraCharges,
     gst_total: gstTotal,
     n_gst_total: Number(saleInput.n_gst_total || 0),
     grand_total: grandTotal,
@@ -512,6 +541,7 @@ export async function addSaleBill(
         n_gst_subtotal: Number(createdSale.n_gst_subtotal),
         tax_rate: Number(createdSale.tax_rate),
         tax_amount: Number(createdSale.tax_amount),
+        extra_charges: Number(createdSale.extra_charges || 0),
         gst_total: Number(createdSale.gst_total),
         n_gst_total: Number(createdSale.n_gst_total),
         grand_total: Number(createdSale.grand_total),

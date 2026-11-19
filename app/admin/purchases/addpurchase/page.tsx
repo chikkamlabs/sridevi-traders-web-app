@@ -115,6 +115,7 @@ export default function AddPurchasePage() {
   const [date, setDate] = useState(getTodayDateString());
   const [gstSubtotal, setGstSubtotal] = useState('0.00');
   const [taxAmount, setTaxAmount] = useState('0.00');
+  const [extraCharges, setExtraCharges] = useState('0.00');
   const [gstTotal, setGstTotal] = useState('0.00');
   const [notes, setNotes] = useState('');
 
@@ -185,9 +186,18 @@ export default function AddPurchasePage() {
       totalSum += itemTotal;
     }
 
+    const extraNum = Math.max(0, Number(extraCharges) || 0);
     setGstSubtotal(subTotalSum.toFixed(2));
     setTaxAmount(taxSum.toFixed(2));
-    setGstTotal(totalSum.toFixed(2));
+    setGstTotal((totalSum + extraNum).toFixed(2));
+  };
+
+  const handleExtraChargesChange = (value: string) => {
+    setExtraCharges(value);
+    const extraNum = Math.max(0, Number(value) || 0);
+    const subNum = Math.max(0, Number(gstSubtotal) || 0);
+    const taxNum = Math.max(0, Number(taxAmount) || 0);
+    setGstTotal((subNum + taxNum + extraNum).toFixed(2));
   };
 
   const filteredFirms = useMemo(() => {
@@ -391,6 +401,7 @@ export default function AddPurchasePage() {
     const totalNum = Number(gstTotal);
     const subtotalNum = Number(gstSubtotal);
     const taxNum = Number(taxAmount);
+    const extraChargesNum = Math.max(0, Number(extraCharges) || 0);
 
     if (isNaN(totalNum) || totalNum <= 0) {
       setError('Total (gst_total) must be greater than 0.');
@@ -410,6 +421,7 @@ export default function AddPurchasePage() {
           date,
           gst_subtotal: isNaN(subtotalNum) ? 0 : subtotalNum,
           tax_amount: isNaN(taxNum) ? 0 : taxNum,
+          extra_charges: isNaN(extraChargesNum) ? 0 : extraChargesNum,
           gst_total: totalNum,
           grand_total: totalNum,
           notes: notes.trim(),
@@ -731,8 +743,8 @@ export default function AddPurchasePage() {
                   </div>
                 </div>
 
-                {/* Row 3: Subtotal (gst_subtotal), Tax Amount, Total (gst_total) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Row 3: Subtotal (gst_subtotal), Tax Amount, Extra Charges, Total (gst_total) */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="form-group mb-0">
                     <label htmlFor="gst-subtotal" className="form-label">
                       Subtotal (gst_subtotal) <span className="text-[var(--color-danger)]">*</span>
@@ -762,6 +774,22 @@ export default function AddPurchasePage() {
                       required
                       value={taxAmount}
                       onChange={(e) => setTaxAmount(e.target.value)}
+                      className="input-field text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="extra-charges" className="form-label">
+                      Extra Charges
+                    </label>
+                    <input
+                      id="extra-charges"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={extraCharges}
+                      onChange={(e) => handleExtraChargesChange(e.target.value)}
                       className="input-field text-sm"
                       disabled={isSaving}
                     />

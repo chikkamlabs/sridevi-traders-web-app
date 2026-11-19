@@ -192,18 +192,11 @@ function OpenPurchaseContent() {
                   </div>
 
                   {/* Financial Summary from purchases table */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
                       <div className="text-[11px] text-[var(--color-text-muted)]">GST Subtotal</div>
                       <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
                         {formatCurrency(purchase.gst_subtotal)}
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
-                      <div className="text-[11px] text-[var(--color-text-muted)]">N-GST Subtotal</div>
-                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
-                        {formatCurrency(purchase.n_gst_subtotal)}
                       </div>
                     </div>
 
@@ -218,13 +211,6 @@ function OpenPurchaseContent() {
                       <div className="text-[11px] text-[var(--color-text-secondary)]">GST Total</div>
                       <div className="text-sm font-bold text-[var(--color-brand-deep-green)] mt-0.5">
                         {formatCurrency(purchase.gst_total)}
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
-                      <div className="text-[11px] text-[var(--color-text-muted)]">N-GST Total</div>
-                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
-                        {formatCurrency(purchase.n_gst_total)}
                       </div>
                     </div>
 

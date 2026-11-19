@@ -230,7 +230,7 @@ export default function AddSupplierTransactionModal({
                 <option value="payment">payment</option>
                 <option value="purchase_return">purchase_return</option>
                 <option value="opening_balance">opening_balance</option>
-                <option value="adjustment">adjustment</option>
+                <option value="adjustment">adjustment (+)</option>
               </select>
             </div>
 
@@ -255,6 +255,12 @@ export default function AddSupplierTransactionModal({
               </select>
             </div>
           </div>
+
+          {transactionType === 'adjustment' && (
+            <div className="p-3 rounded-lg bg-[var(--color-success-bg)] text-[var(--color-success-text)] border border-[var(--color-success-border)] text-xs font-medium">
+              <strong>+ Operation Active:</strong> Adjustment will perform a <strong>+ (Add)</strong> operation everywhere on the selected balance ({taxMode === 'gst' ? 'gst_balance' : taxMode === 'n_gst' ? 'n_gst_balance' : taxMode}).
+            </div>
+          )}
 
           {/* Tax Mode & Amount */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

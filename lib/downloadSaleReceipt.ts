@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable';
 export interface SaleReceiptItem {
   product_name: string;
   product_code?: string;
+  hsn_code?: string;
   variant_name: string;
   variant_code?: string;
   quantity: number;
@@ -29,10 +30,12 @@ export interface SaleReceiptData {
   firm_address?: string | null;
   dealer_name: string;
   dealer_phone?: string | null;
+  dealer_address?: string | null;
   dealer_gst?: string | null;
   dealer_city?: string | null;
   gst_subtotal: number;
   tax_amount: number;
+  extra_charges?: number;
   gst_total: number;
   notes?: string | null;
   items: SaleReceiptItem[];
@@ -51,9 +54,29 @@ function formatRs(value: number): string {
   })}`;
 }
 
+function drawLabelAndValue(
+  doc: jsPDF,
+  label: string,
+  value: string,
+  x: number,
+  y: number,
+  options?: { boldValue?: boolean; fontSize?: number }
+): void {
+  const fontSize = options?.fontSize ?? 10;
+  doc.setFontSize(fontSize);
+  doc.setFont('helvetica', 'bold');
+  doc.text(label, x, y);
+  const labelWidth = doc.getTextWidth(label);
+  doc.setFont('helvetica', options?.boldValue ? 'bold' : 'normal');
+  doc.text(value, x + labelWidth + 1.5, y);
+}
+
 /**
- * Generates a GST Sale Receipt PDF using jspdf and jspdf-autotable
- * containing important information and ONLY GST columns,
+ * Generates a Sale Receipt PDF using jspdf and jspdf-autotable
+ * in black-and-white with page border, centered Sale Receipt title,
+ * firm details, Sale Date & Generated on, enlarged bold Sale & Dealer details,
+ * HSN code column, Bank Details, Totals with Extra Amount,
+ * Transportation Details (bottom left), and Authorised Signatory (bottom right),
  * then triggers download and opens the PDF in a new tab (target = _blank).
  */
 export function downloadSaleReceipt(data: SaleReceiptData): void {
@@ -64,99 +87,158 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
   }) as JsPDFWithAutoTable;
 
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 14;
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const borderSideMargin = 8;
+  const borderTopMargin = 8;
+  const borderBottomMargin = 16; // Raised bottom border line
+  const margin = 13;
 
-  // Header Banner
-  doc.setFillColor(20, 83, 45); // Deep green matching brand palette
-  doc.rect(0, 0, pageWidth, 30, 'F');
+  const generatedTimestamp = new Date().toLocaleString('en-IN');
 
-  doc.setTextColor(255, 255, 255);
+  // White background and Black text throughout
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, pageWidth, pageHeight, 'F');
+  doc.setTextColor(0, 0, 0);
+  doc.setDrawColor(0, 0, 0);
+
+  // Top Middle: "Sale Receipt"
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(data.firm_name || 'Sridevi Traders', margin, 13);
+  doc.setFontSize(15);
+  doc.text('Sale Receipt', pageWidth / 2, 16.5, { align: 'center' });
+
+  // Subtle divider under top title
+  doc.setLineWidth(0.25);
+  doc.line(margin, 20, pageWidth - margin, 20);
+
+  // Header Left: Firm Name, GST Number, 3-line Address
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.text(data.firm_name || 'Sridevi Traders', margin, 27.5);
+
+  doc.setFontSize(9);
+  drawLabelAndValue(
+    doc,
+    'GST Number:',
+    `${data.firm_gst || '-'}${data.firm_phone ? `  |  Ph: ${data.firm_phone}` : ''}`,
+    margin,
+    33.5,
+    { boldValue: true, fontSize: 9 }
+  );
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  const firmMetaParts: string[] = [];
-  if (data.firm_gst) firmMetaParts.push(`GSTIN: ${data.firm_gst}`);
-  if (data.firm_phone) firmMetaParts.push(`Ph: ${data.firm_phone}`);
-  if (firmMetaParts.length > 0) {
-    doc.text(firmMetaParts.join('  |  '), margin, 20);
-  }
-  if (data.firm_address) {
-    doc.text(data.firm_address.slice(0, 85), margin, 25.5);
-  }
+  doc.text('Address: 36-1-62/1, Surya Nagar,', margin, 39);
+  doc.text('Kommula vari st, Pydiparru,', margin, 44);
+  doc.text('Tanuku - 534211, W.G, A.P', margin, 49);
 
+  // Header Right: Sale Date & Generated on
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('GST SALE RECEIPT', pageWidth - margin, 14, { align: 'right' });
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`Date: ${data.date || '-'}`, pageWidth - margin, 21, {
+  doc.setFontSize(9.5);
+  doc.text(`Sale Date: ${data.date || '-'}`, pageWidth - margin, 27.5, {
     align: 'right',
   });
 
-  // Important Information Section
-  let currentY = 38;
-  doc.setDrawColor(210, 224, 215);
-  doc.setFillColor(246, 250, 247);
-  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 28, 2, 2, 'FD');
-
-  // Left Column: Bill Details
-  doc.setTextColor(20, 83, 45);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('SALE DETAILS', margin + 4, currentY + 6.5);
-
-  doc.setTextColor(35, 45, 38);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`Sale No: ${data.sale_number || '-'}`, margin + 4, currentY + 13);
-  doc.text(`Invoice No: ${data.invoice_number || '-'}`, margin + 4, currentY + 18.5);
-  doc.text(`Sale Date: ${data.date || '-'}`, margin + 4, currentY + 24);
+  doc.setFontSize(8.5);
+  doc.text(`Generated on: ${generatedTimestamp}`, pageWidth - margin, 33.5, {
+    align: 'right',
+  });
+
+  // Header divider line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.35);
+  doc.line(margin, 53.5, pageWidth - margin, 53.5);
+
+  // Sale Details & Dealer Details Box (increased text size & bold important values)
+  let currentY = 59.5;
+  const fullDealerAddress = [data.dealer_address, data.dealer_city]
+    .filter((v) => Boolean(v && v.trim()))
+    .join(', ');
+  const midX = pageWidth / 2 + 4;
+  const maxDealerAddrWidth = pageWidth - margin - midX - 4;
+  doc.setFontSize(10);
+  const addressPrefix = 'Address: ';
+  doc.setFont('helvetica', 'bold');
+  const addressPrefixWidth = doc.getTextWidth(addressPrefix);
+  doc.setFont('helvetica', 'normal');
+  const wrappedDealerAddress = doc.splitTextToSize(
+    fullDealerAddress || '-',
+    Math.max(30, maxDealerAddrWidth - addressPrefixWidth - 1.5)
+  ) as string[];
+
+  const extraAddressLines = Math.max(0, wrappedDealerAddress.length - 1);
+  const infoBoxHeight = 32 + extraAddressLines * 5;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, 'FD');
+
+  // Vertical divider inside info box
+  doc.line(pageWidth / 2, currentY, pageWidth / 2, currentY + infoBoxHeight);
+
+  // Left Column: Sale Details
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('SALE DETAILS', margin + 4, currentY + 7.5);
+
+  drawLabelAndValue(doc, 'Sale No:', data.sale_number || '-', margin + 4, currentY + 15, {
+    boldValue: true,
+    fontSize: 10,
+  });
+  drawLabelAndValue(
+    doc,
+    'Invoice No:',
+    data.invoice_number || '-',
+    margin + 4,
+    currentY + 21.5,
+    { boldValue: true, fontSize: 10 }
+  );
+  drawLabelAndValue(doc, 'Sale Date:', data.date || '-', margin + 4, currentY + 28, {
+    boldValue: true,
+    fontSize: 10,
+  });
 
   // Right Column: Dealer Details
-  const midX = pageWidth / 2 + 4;
-  doc.setTextColor(20, 83, 45);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('DEALER DETAILS', midX, currentY + 6.5);
+  doc.setFontSize(11);
+  doc.text('DEALER DETAILS', midX, currentY + 7.5);
 
-  doc.setTextColor(35, 45, 38);
+  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', midX, currentY + 15, {
+    boldValue: true,
+    fontSize: 10,
+  });
+  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', midX, currentY + 21.5, {
+    boldValue: true,
+    fontSize: 10,
+  });
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(addressPrefix, midX, currentY + 28);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`Dealer: ${data.dealer_name || '-'}`, midX, currentY + 13);
-  doc.text(
-    `Phone: ${data.dealer_phone || '-'}`,
-    midX,
-    currentY + 18.5
-  );
-  const dealerExtra: string[] = [];
-  if (data.dealer_city) dealerExtra.push(data.dealer_city);
-  if (data.dealer_gst) dealerExtra.push(`GSTIN: ${data.dealer_gst}`);
-  doc.text(
-    dealerExtra.length > 0 ? dealerExtra.join(' | ') : 'Billing Type: GST',
-    midX,
-    currentY + 24
-  );
+  wrappedDealerAddress.forEach((line, idx) => {
+    doc.text(line, midX + addressPrefixWidth + 1.5, currentY + 28 + idx * 5);
+  });
 
-  currentY += 34;
+  currentY += infoBoxHeight + 8;
 
-  // GST Items Table (ONLY GST columns)
+  // Items Table (HSN Code before Product, no GST labels, black & white only)
   const tableHead = [
     [
       '#',
+      'HSN Code',
       'Product',
       'Variant',
       'Qty',
       'Base Qty',
-      'Unit Price (GST)',
+      'Unit Price',
       'Disc %',
       'Disc Amt',
       'Tax %',
       'Tax Amt',
-      'Total (GST)',
+      'Total',
     ],
   ];
 
@@ -173,6 +255,7 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
 
     return [
       String(idx + 1),
+      item.hsn_code?.trim() || '-',
       prodLabel,
       varLabel,
       String(item.quantity),
@@ -190,108 +273,236 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     startY: currentY,
     head: tableHead,
     body: tableBody,
-    margin: { left: margin, right: margin },
+    margin: { top: 14, bottom: 22, left: margin, right: margin },
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 7.5,
-      cellPadding: 2.2,
-      textColor: [30, 41, 35],
-      lineColor: [215, 226, 219],
+      fontSize: 7.4,
+      cellPadding: 2.4,
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
+      lineColor: [0, 0, 0],
       lineWidth: 0.2,
       valign: 'middle',
     },
     headStyles: {
-      fillColor: [20, 83, 45],
-      textColor: [255, 255, 255],
+      fillColor: [255, 255, 255],
+      textColor: [0, 0, 0],
       fontStyle: 'bold',
-      fontSize: 7.5,
+      fontSize: 7.4,
       halign: 'center',
+      lineColor: [0, 0, 0],
+      lineWidth: 0.25,
     },
     alternateRowStyles: {
-      fillColor: [248, 252, 249],
+      fillColor: [255, 255, 255],
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 7 },
-      1: { halign: 'left', cellWidth: 32 },
-      2: { halign: 'left', cellWidth: 24 },
-      3: { halign: 'right', cellWidth: 11 },
-      4: { halign: 'right', cellWidth: 16 },
-      5: { halign: 'right', cellWidth: 21 },
-      6: { halign: 'right', cellWidth: 12 },
-      7: { halign: 'right', cellWidth: 16 },
-      8: { halign: 'right', cellWidth: 11 },
-      9: { halign: 'right', cellWidth: 16 },
-      10: { halign: 'right', cellWidth: 22, fontStyle: 'bold' },
+      1: { halign: 'center', cellWidth: 16 },
+      2: { halign: 'left', cellWidth: 26 },
+      3: { halign: 'left', cellWidth: 21 },
+      4: { halign: 'right', cellWidth: 10 },
+      5: { halign: 'right', cellWidth: 15 },
+      6: { halign: 'right', cellWidth: 18 },
+      7: { halign: 'right', cellWidth: 11 },
+      8: { halign: 'right', cellWidth: 15 },
+      9: { halign: 'right', cellWidth: 10 },
+      10: { halign: 'right', cellWidth: 15 },
+      11: { halign: 'right', cellWidth: 20, fontStyle: 'bold' },
     },
   });
 
-  const tableEndY = doc.lastAutoTable?.finalY ?? currentY + 20;
-  let summaryY = tableEndY + 8;
+  const tableEndY = doc.lastAutoTable?.finalY ?? currentY + 24;
+  let summaryY = tableEndY + 10;
 
-  // Prevent summary box overflow near bottom of page
-  if (summaryY + 42 > doc.internal.pageSize.getHeight()) {
+  const hasNotes = Boolean(data.notes && data.notes.trim());
+  const wrappedNotes = hasNotes
+    ? (doc.splitTextToSize(data.notes!.trim(), pageWidth - margin * 2) as string[])
+    : [];
+  const notesBlockHeight = hasNotes ? 9 + wrappedNotes.length * 4.5 : 0;
+  const summaryBoxHeight = 39;
+  const bottomBlockHeight = 36;
+  const bottomLimitY = pageHeight - borderBottomMargin - 6;
+
+  // Prevent Bank Details + Totals + Notes overflow
+  if (summaryY + summaryBoxHeight + notesBlockHeight > bottomLimitY) {
     doc.addPage();
-    summaryY = 20;
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    summaryY = 16;
   }
 
-  // Notes (Left) + GST Totals Box (Right)
-  if (data.notes && data.notes.trim()) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(20, 83, 45);
-    doc.text('Notes:', margin, summaryY + 4);
+  // Right Box: Subtotal, Tax Amount, Extra Amount, Total Amount
+  const totalsBoxWidth = 78;
+  const totalsBoxX = pageWidth - margin - totalsBoxWidth;
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
-    doc.setTextColor(60, 70, 65);
-    const wrappedNotes = doc.splitTextToSize(data.notes.trim(), 90);
-    doc.text(wrappedNotes, margin, summaryY + 9.5);
-  }
+  // Left Box: Bank Details (left of Subtotal / Tax / Extra / Total)
+  const bankBoxWidth = pageWidth - margin * 2 - totalsBoxWidth - 6;
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, summaryY, bankBoxWidth, summaryBoxHeight, 'FD');
 
-  const boxWidth = 76;
-  const boxX = pageWidth - margin - boxWidth;
-  doc.setDrawColor(20, 83, 45);
-  doc.setFillColor(246, 250, 247);
-  doc.roundedRect(boxX, summaryY, boxWidth, 27, 2, 2, 'FD');
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Bank Details', margin + 4, summaryY + 7);
+
+  drawLabelAndValue(
+    doc,
+    'Account Name:',
+    'SRIDEVI Traders & CO',
+    margin + 4,
+    summaryY + 14.5,
+    { boldValue: true, fontSize: 9 }
+  );
+  drawLabelAndValue(
+    doc,
+    'Account Number:',
+    '120031141040',
+    margin + 4,
+    summaryY + 21,
+    { boldValue: true, fontSize: 9 }
+  );
+  drawLabelAndValue(doc, 'IFSC:', 'CNRB0002776', margin + 4, summaryY + 27.5, {
+    boldValue: true,
+    fontSize: 9,
+  });
+  drawLabelAndValue(
+    doc,
+    'Bank Name:',
+    'CANARA BANK, TANUKU BRANCH',
+    margin + 4,
+    summaryY + 34,
+    { boldValue: false, fontSize: 9 }
+  );
+
+  // Totals Box (Right)
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+  doc.rect(totalsBoxX, summaryY, totalsBoxWidth, summaryBoxHeight, 'FD');
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(50, 60, 54);
-  doc.text('GST Subtotal:', boxX + 4, summaryY + 7);
-  doc.text(formatRs(data.gst_subtotal), boxX + boxWidth - 4, summaryY + 7, {
+  doc.setFontSize(9.5);
+  doc.setTextColor(0, 0, 0);
+
+  doc.text('Subtotal:', totalsBoxX + 4, summaryY + 7.5);
+  doc.text(formatRs(data.gst_subtotal), totalsBoxX + totalsBoxWidth - 4, summaryY + 7.5, {
     align: 'right',
   });
 
-  doc.text('Tax Amount:', boxX + 4, summaryY + 13.5);
-  doc.text(formatRs(data.tax_amount), boxX + boxWidth - 4, summaryY + 13.5, {
+  doc.text('Tax Amount:', totalsBoxX + 4, summaryY + 14.5);
+  doc.text(formatRs(data.tax_amount), totalsBoxX + totalsBoxWidth - 4, summaryY + 14.5, {
     align: 'right',
   });
 
-  doc.setDrawColor(200, 218, 206);
-  doc.line(boxX + 4, summaryY + 16.5, boxX + boxWidth - 4, summaryY + 16.5);
+  doc.text('Extra Amount:', totalsBoxX + 4, summaryY + 21.5);
+  doc.text(
+    formatRs(data.extra_charges || 0),
+    totalsBoxX + totalsBoxWidth - 4,
+    summaryY + 21.5,
+    { align: 'right' }
+  );
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.line(totalsBoxX + 4, summaryY + 25.5, totalsBoxX + totalsBoxWidth - 4, summaryY + 25.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
-  doc.setTextColor(20, 83, 45);
-  doc.text('Total (GST):', boxX + 4, summaryY + 23);
-  doc.text(formatRs(data.gst_total), boxX + boxWidth - 4, summaryY + 23, {
+  doc.setTextColor(0, 0, 0);
+  doc.text('Total Amount:', totalsBoxX + 4, summaryY + 33.5);
+  doc.text(formatRs(data.gst_total), totalsBoxX + totalsBoxWidth - 4, summaryY + 33.5, {
     align: 'right',
   });
 
-  // Footer
-  const footerY = doc.internal.pageSize.getHeight() - 12;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(120, 130, 124);
-  doc.text(
-    `Generated on ${new Date().toLocaleString('en-IN')}`,
-    margin,
-    footerY
-  );
-  doc.text('Authorised Signatory', pageWidth - margin, footerY, {
-    align: 'right',
-  });
+  let afterSummaryY = summaryY + summaryBoxHeight;
+
+  // Optional Notes below Bank Details & Totals
+  if (hasNotes) {
+    const notesY = afterSummaryY + 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Notes:', margin, notesY);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(wrappedNotes, margin, notesY + 5);
+    afterSummaryY = notesY + 5 + wrappedNotes.length * 4.5;
+  }
+
+  // Bottom Section: Transportation Details (Bottom Left) & Authorised Signatory (Bottom Right)
+  // Positioned cleanly above the raised bottom page border line
+  let bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
+  if (afterSummaryY + 8 > bottomBlockY) {
+    doc.addPage();
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
+  }
+
+  // Bottom Left Box: Transportation Details (Name, Vehicle Number)
+  const transportBoxWidth = 96;
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, bottomBlockY, transportBoxWidth, bottomBlockHeight, 'FD');
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Transportation Details', margin + 4, bottomBlockY + 7.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('Name:', margin + 4, bottomBlockY + 17);
+  doc.setLineWidth(0.2);
+  doc.line(margin + 17, bottomBlockY + 17.5, margin + transportBoxWidth - 4, bottomBlockY + 17.5);
+
+  doc.text('Vehicle Number:', margin + 4, bottomBlockY + 27.5);
+  doc.line(margin + 33, bottomBlockY + 28, margin + transportBoxWidth - 4, bottomBlockY + 28);
+
+  // Bottom Right Box: Authorised Signatory (Name, Date, Sign)
+  const signBoxWidth = 78;
+  const signBoxX = pageWidth - margin - signBoxWidth;
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+  doc.rect(signBoxX, bottomBlockY, signBoxWidth, bottomBlockHeight, 'FD');
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.text('Authorised Signatory', signBoxX + 4, bottomBlockY + 7.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('Name:', signBoxX + 4, bottomBlockY + 15.5);
+  doc.setLineWidth(0.2);
+  doc.line(signBoxX + 17, bottomBlockY + 16, signBoxX + signBoxWidth - 4, bottomBlockY + 16);
+
+  doc.text('Date:', signBoxX + 4, bottomBlockY + 23);
+  doc.line(signBoxX + 15, bottomBlockY + 23.5, signBoxX + signBoxWidth - 4, bottomBlockY + 23.5);
+
+  doc.text('Sign:', signBoxX + 4, bottomBlockY + 30.5);
+  doc.line(signBoxX + 15, bottomBlockY + 31, signBoxX + signBoxWidth - 4, bottomBlockY + 31);
+
+  // Draw outer page border on every page (with raised bottom line)
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.4);
+    doc.rect(
+      borderSideMargin,
+      borderTopMargin,
+      pageWidth - borderSideMargin * 2,
+      pageHeight - borderTopMargin - borderBottomMargin
+    );
+  }
 
   const safeFilename = `${(data.sale_number || 'sale_receipt').replace(
     /[^a-zA-Z0-9_-]/g,
