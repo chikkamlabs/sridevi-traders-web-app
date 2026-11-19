@@ -93,7 +93,7 @@ function updateLocalSupplierBalanceByTaxMode(
   firmId: string,
   supplierId: string,
   taxMode: TaxMode,
-  amount: number
+  signedAmount: number
 ): void {
   if (taxMode !== 'gst' && taxMode !== 'n_gst') return;
   const balances = getLocalBalances();
@@ -107,11 +107,11 @@ function updateLocalSupplierBalanceByTaxMode(
       ...current,
       gst_balance:
         taxMode === 'gst'
-          ? Number(current.gst_balance || 0) - amount
+          ? Number(current.gst_balance || 0) + signedAmount
           : Number(current.gst_balance || 0),
       n_gst_balance:
         taxMode === 'n_gst'
-          ? Number(current.n_gst_balance || 0) - amount
+          ? Number(current.n_gst_balance || 0) + signedAmount
           : Number(current.n_gst_balance || 0),
       updated_at: new Date().toISOString(),
     };
@@ -120,8 +120,8 @@ function updateLocalSupplierBalanceByTaxMode(
       id: 'bal-' + Math.random().toString(36).substring(2, 9),
       firm_id: firmId,
       supplier_id: supplierId,
-      gst_balance: taxMode === 'gst' ? -amount : 0,
-      n_gst_balance: taxMode === 'n_gst' ? -amount : 0,
+      gst_balance: taxMode === 'gst' ? signedAmount : 0,
+      n_gst_balance: taxMode === 'n_gst' ? signedAmount : 0,
       updated_at: new Date().toISOString(),
     });
   }
@@ -258,7 +258,9 @@ export async function getSimpleSupplierTransactions(
 
 /**
  * Insert a record into supplier_transactions and update firm_supplier_balances.gst_balance (if tax_mode = gst)
- * or firm_supplier_balances.n_gst_balance (if tax_mode = n_gst) by subtracting the entered amount.
+ * or firm_supplier_balances.n_gst_balance (if tax_mode = n_gst):
+ * - adds (+) the entered amount when transaction_type = 'adjustment'
+ * - subtracts (-) the entered amount otherwise.
  */
 export async function addSimpleSupplierTransactionAndUpdateBalance(
   input: AddSimpleSupplierTransactionInput
@@ -295,6 +297,9 @@ export async function addSimpleSupplierTransactionAndUpdateBalance(
       input.transaction_date || new Date().toISOString().split('T')[0],
   };
 
+  const isAdjustment = input.transaction_type === 'adjustment';
+  const signedDelta = isAdjustment ? amountNum : -amountNum;
+
   if (isSupabaseConfigured) {
     try {
       // 1. Insert into supplier_transactions
@@ -329,11 +334,11 @@ export async function addSimpleSupplierTransactionAndUpdateBalance(
           const updateFields =
             input.tax_mode === 'gst'
               ? {
-                  gst_balance: Number(existing.gst_balance || 0) - amountNum,
+                  gst_balance: Number(existing.gst_balance || 0) + signedDelta,
                   updated_at: nowIso,
                 }
               : {
-                  n_gst_balance: Number(existing.n_gst_balance || 0) - amountNum,
+                  n_gst_balance: Number(existing.n_gst_balance || 0) + signedDelta,
                   updated_at: nowIso,
                 };
 
@@ -352,8 +357,8 @@ export async function addSimpleSupplierTransactionAndUpdateBalance(
               {
                 firm_id: input.firm_id,
                 supplier_id: input.supplier_id,
-                gst_balance: input.tax_mode === 'gst' ? -amountNum : 0,
-                n_gst_balance: input.tax_mode === 'n_gst' ? -amountNum : 0,
+                gst_balance: input.tax_mode === 'gst' ? signedDelta : 0,
+                n_gst_balance: input.tax_mode === 'n_gst' ? signedDelta : 0,
               },
             ]);
 
@@ -386,7 +391,7 @@ export async function addSimpleSupplierTransactionAndUpdateBalance(
         input.firm_id,
         input.supplier_id,
         input.tax_mode,
-        amountNum
+        signedDelta
       );
 
       return { data: formatted, error: null };
@@ -412,7 +417,7 @@ export async function addSimpleSupplierTransactionAndUpdateBalance(
     input.firm_id,
     input.supplier_id,
     input.tax_mode,
-    amountNum
+    signedDelta
   );
 
   return { data: localTx, error: null };

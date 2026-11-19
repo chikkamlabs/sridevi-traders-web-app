@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import AdminHeader from '@/components/admin/header';
 import AdminSidebar from '@/components/admin/sidebar';
 import AddDealerModal from '@/components/admin/adddealer';
@@ -235,16 +236,25 @@ export default function DealersPage() {
                             </span>
                           </td>
 
-                          {/* Action: Open */}
+                          {/* Action: Financials & Open */}
                           <td className="py-4 px-4 sm:px-6 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenDealer(dealer)}
-                              className="btn btn-outline btn-sm inline-flex items-center gap-1.5 text-xs text-[var(--color-brand-deep-green)] hover:border-[var(--color-brand-deep-green)] hover:bg-[var(--color-brand-light-green)] cursor-pointer"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              <span>Open</span>
-                            </button>
+                            <div className="inline-flex items-center justify-end gap-2">
+                              <Link
+                                href={`/admin/dealers/financials?id=${dealer.id}`}
+                                className="btn btn-outline btn-sm inline-flex items-center gap-1.5 text-xs text-[var(--color-brand-deep-green)] hover:border-[var(--color-brand-deep-green)] hover:bg-[var(--color-brand-light-green)] cursor-pointer"
+                              >
+                                <IndianRupee className="w-3.5 h-3.5" />
+                                <span>Financials</span>
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenDealer(dealer)}
+                                className="btn btn-outline btn-sm inline-flex items-center gap-1.5 text-xs text-[var(--color-brand-deep-green)] hover:border-[var(--color-brand-deep-green)] hover:bg-[var(--color-brand-light-green)] cursor-pointer"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                <span>Open</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))

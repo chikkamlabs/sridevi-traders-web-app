@@ -320,3 +320,206 @@ export async function recordSaleDealerTransaction(params: {
 
   return { data: txResult.data, error: null };
 }
+
+export interface DealerFirmGstBalance {
+  id: string;
+  firm_id: string;
+  firm_name: string;
+  dealer_id: string;
+  gst_balance: number;
+  updated_at?: string;
+}
+
+export interface DealerTransactionRow extends DealerTransaction {
+  firm_name?: string;
+}
+
+/**
+ * Fetch all firm_dealer_balances rows for a given dealer_id (gst_balance only).
+ */
+export async function getDealerGstBalances(
+  dealerId: string
+): Promise<DealerFirmGstBalance[]> {
+  if (!dealerId) return [];
+
+  const { getFirms } = await import('@/lib/firmsStore');
+  const firms = await getFirms();
+  const firmMap = new Map<string, string>();
+  firms.forEach((f) => firmMap.set(f.id, f.name));
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('firm_dealer_balances')
+        .select(`
+          id,
+          firm_id,
+          dealer_id,
+          gst_balance,
+          updated_at,
+          firms ( name )
+        `)
+        .eq('dealer_id', dealerId);
+
+      if (!error && data) {
+        return data.map((b: any) => ({
+          id: b.id,
+          firm_id: b.firm_id,
+          firm_name: b.firms?.name || firmMap.get(b.firm_id) || 'Firm',
+          dealer_id: b.dealer_id,
+          gst_balance: Number(b.gst_balance || 0),
+          updated_at: b.updated_at,
+        }));
+      }
+    } catch (err) {
+      console.warn('Error fetching firm_dealer_balances from Supabase:', err);
+    }
+  }
+
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_DEALER_BALANCES_KEY);
+    const balances: any[] = raw ? JSON.parse(raw) : [];
+    return balances
+      .filter((b) => b.dealer_id === dealerId)
+      .map((b) => ({
+        id: b.id || `${b.firm_id}_${b.dealer_id}`,
+        firm_id: b.firm_id,
+        firm_name: firmMap.get(b.firm_id) || b.firm_name || 'Firm',
+        dealer_id: b.dealer_id,
+        gst_balance: Number(b.gst_balance || 0),
+        updated_at: b.updated_at,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch all dealer_transactions rows for a given dealer_id where tax_mode = 'gst'.
+ */
+export async function getDealerGstTransactions(
+  dealerId: string
+): Promise<DealerTransactionRow[]> {
+  if (!dealerId) return [];
+
+  const { getFirms } = await import('@/lib/firmsStore');
+  const firms = await getFirms();
+  const firmMap = new Map<string, string>();
+  firms.forEach((f) => firmMap.set(f.id, f.name));
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('dealer_transactions')
+        .select(`
+          id,
+          firm_id,
+          dealer_id,
+          transaction_code,
+          transaction_type,
+          payment_method,
+          amount,
+          tax_mode,
+          reference_type,
+          reference_id,
+          notes,
+          transaction_date,
+          created_by,
+          created_at,
+          updated_at,
+          firms ( name )
+        `)
+        .eq('dealer_id', dealerId)
+        .eq('tax_mode', 'gst')
+        .order('transaction_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        return data.map((tx: any) => ({
+          id: tx.id,
+          firm_id: tx.firm_id,
+          firm_name: tx.firms?.name || firmMap.get(tx.firm_id) || 'Firm',
+          dealer_id: tx.dealer_id,
+          transaction_code: tx.transaction_code,
+          transaction_type: tx.transaction_type,
+          payment_method: tx.payment_method,
+          amount: Number(tx.amount || 0),
+          tax_mode: tx.tax_mode,
+          reference_type: tx.reference_type,
+          reference_id: tx.reference_id || null,
+          notes: tx.notes || null,
+          transaction_date: tx.transaction_date,
+          created_by: tx.created_by || null,
+          created_at: tx.created_at,
+          updated_at: tx.updated_at,
+        }));
+      }
+    } catch (err) {
+      console.warn('Error fetching GST dealer_transactions from Supabase:', err);
+    }
+  }
+
+  return getLocalDealerTransactions()
+    .filter((tx) => tx.dealer_id === dealerId && tx.tax_mode === 'gst')
+    .sort((a, b) =>
+      String(b.transaction_date || '').localeCompare(String(a.transaction_date || ''))
+    )
+    .map((tx) => ({
+      ...tx,
+      firm_name: firmMap.get(tx.firm_id) || 'Firm',
+      amount: Number(tx.amount || 0),
+    }));
+}
+
+/**
+ * Insert a record into dealer_transactions with tax_mode = 'gst'
+ * and update firm_dealer_balances.gst_balance = firm_dealer_balances.gst_balance - amount.
+ */
+export async function addDealerGstTransactionAndUpdateBalance(
+  input: Omit<DealerTransactionInput, 'tax_mode'>
+): Promise<{ data: DealerTransaction | null; error: string | null }> {
+  if (!input.firm_id) {
+    return { data: null, error: 'Please select a firm.' };
+  }
+  if (!input.dealer_id) {
+    return { data: null, error: 'Dealer ID is required.' };
+  }
+
+  const amountNum = Number(input.amount);
+  if (isNaN(amountNum) || amountNum <= 0) {
+    return { data: null, error: 'Amount must be greater than 0.' };
+  }
+
+  const txResult = await addDealerTransaction({
+    ...input,
+    amount: amountNum,
+    tax_mode: 'gst',
+    reference_type: input.reference_type?.trim() || 'manual',
+    reference_id: input.reference_id?.trim() || null,
+  });
+
+  if (txResult.error || !txResult.data) {
+    return {
+      data: null,
+      error: txResult.error || 'Failed to insert dealer transaction.',
+    };
+  }
+
+  const balResult = await incrementFirmDealerGstBalance(
+    input.firm_id,
+    input.dealer_id,
+    -amountNum
+  );
+
+  if (!balResult.success) {
+    return {
+      data: txResult.data,
+      error:
+        balResult.error ||
+        'Transaction saved, but failed to update dealer GST balance.',
+    };
+  }
+
+  return { data: txResult.data, error: null };
+}

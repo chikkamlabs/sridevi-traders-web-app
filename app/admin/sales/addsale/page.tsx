@@ -121,6 +121,7 @@ export default function AddSalePage() {
   const [date, setDate] = useState(getTodayDateString());
   const [gstSubtotal, setGstSubtotal] = useState('0.00');
   const [taxAmount, setTaxAmount] = useState('0.00');
+  const [extraCharges, setExtraCharges] = useState('0.00');
   const [gstTotal, setGstTotal] = useState('0.00');
   const [notes, setNotes] = useState('');
 
@@ -198,9 +199,18 @@ export default function AddSalePage() {
       totalSum += itemTotal;
     }
 
+    const extraNum = Math.max(0, Number(extraCharges) || 0);
     setGstSubtotal(subTotalSum.toFixed(2));
     setTaxAmount(taxSum.toFixed(2));
-    setGstTotal(totalSum.toFixed(2));
+    setGstTotal((totalSum + extraNum).toFixed(2));
+  };
+
+  const handleExtraChargesChange = (value: string) => {
+    setExtraCharges(value);
+    const extraNum = Math.max(0, Number(value) || 0);
+    const subNum = Math.max(0, Number(gstSubtotal) || 0);
+    const taxNum = Math.max(0, Number(taxAmount) || 0);
+    setGstTotal((subNum + taxNum + extraNum).toFixed(2));
   };
 
   const filteredFirms = useMemo(() => {
@@ -411,6 +421,7 @@ export default function AddSalePage() {
     const totalNum = Number(gstTotal);
     const subtotalNum = Number(gstSubtotal);
     const taxNum = Number(taxAmount);
+    const extraChargesNum = Math.max(0, Number(extraCharges) || 0);
 
     if (isNaN(totalNum) || totalNum <= 0) {
       setError('Total (gst_total) must be greater than 0.');
@@ -430,6 +441,7 @@ export default function AddSalePage() {
           date,
           gst_subtotal: isNaN(subtotalNum) ? 0 : subtotalNum,
           tax_amount: isNaN(taxNum) ? 0 : taxNum,
+          extra_charges: isNaN(extraChargesNum) ? 0 : extraChargesNum,
           gst_total: totalNum,
           grand_total: totalNum,
           notes: notes.trim(),
@@ -515,6 +527,7 @@ export default function AddSalePage() {
       return {
         product_name: prod?.name || 'Product',
         product_code: prod?.product_code || '',
+        hsn_code: prod?.hsn_code || '',
         variant_name: variant?.variant_name || 'Variant',
         variant_code: variant?.variant_code || '',
         quantity: Number(row.quantity) || 0,
@@ -541,10 +554,12 @@ export default function AddSalePage() {
       firm_address: selectedFirm.address || null,
       dealer_name: selectedDealer.name,
       dealer_phone: selectedDealer.phone || null,
+      dealer_address: selectedDealer.address || null,
       dealer_gst: selectedDealer.gst_number || null,
       dealer_city: selectedDealer.city || null,
       gst_subtotal: Number(gstSubtotal) || 0,
       tax_amount: Number(taxAmount) || 0,
+      extra_charges: Math.max(0, Number(extraCharges) || 0),
       gst_total: Number(gstTotal) || 0,
       notes: notes.trim() || null,
       items: receiptItems,
@@ -823,8 +838,8 @@ export default function AddSalePage() {
                   </div>
                 </div>
 
-                {/* Row 3: Subtotal (gst_subtotal), Tax Amount, Total (gst_total) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Row 3: Subtotal (gst_subtotal), Tax Amount, Extra Charges, Total (gst_total) */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="form-group mb-0">
                     <label htmlFor="sale-gst-subtotal" className="form-label">
                       Subtotal (gst_subtotal) <span className="text-[var(--color-danger)]">*</span>
@@ -854,6 +869,22 @@ export default function AddSalePage() {
                       required
                       value={taxAmount}
                       onChange={(e) => setTaxAmount(e.target.value)}
+                      className="input-field text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-extra-charges" className="form-label">
+                      Extra Charges
+                    </label>
+                    <input
+                      id="sale-extra-charges"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={extraCharges}
+                      onChange={(e) => handleExtraChargesChange(e.target.value)}
                       className="input-field text-sm"
                       disabled={isSaving}
                     />
@@ -934,7 +965,11 @@ export default function AddSalePage() {
                             p.name.toLowerCase().includes(rowSearch.trim().toLowerCase()) ||
                             p.product_code
                               .toLowerCase()
-                              .includes(rowSearch.trim().toLowerCase())
+                              .includes(rowSearch.trim().toLowerCase()) ||
+                            (p.hsn_code &&
+                              p.hsn_code
+                                .toLowerCase()
+                                .includes(rowSearch.trim().toLowerCase()))
                         )
                       : products;
                     const recentRates = row.product_id
@@ -989,11 +1024,16 @@ export default function AddSalePage() {
                             >
                               <span className="truncate">
                                 {selectedProduct
-                                  ? `${selectedProduct.name} (${selectedProduct.product_code})`
+                                  ? `${selectedProduct.name} (${selectedProduct.product_code}${selectedProduct.hsn_code ? ` • HSN: ${selectedProduct.hsn_code}` : ''})`
                                   : 'Search & select product...'}
                               </span>
                               <span className="text-[10px] text-[var(--color-text-muted)]">▼</span>
                             </button>
+                            {selectedProduct && (
+                              <div className="text-[11px] font-mono text-[var(--color-text-muted)] mt-1">
+                                HSN Code: {selectedProduct.hsn_code || '—'}
+                              </div>
+                            )}
 
                             {openProductPickerKey === row.keyId && (
                               <div className="absolute top-full left-0 mt-1 w-full bg-[var(--color-brand-white)] rounded-lg border border-[var(--color-border)] shadow-xl z-30 p-2 animate-fade-in">
@@ -1008,7 +1048,7 @@ export default function AddSalePage() {
                                         [row.keyId]: e.target.value,
                                       }))
                                     }
-                                    placeholder="Search product name or code..."
+                                    placeholder="Search product name, code, or HSN..."
                                     className="input-field py-1.5 pl-8 text-xs"
                                     autoFocus
                                   />
@@ -1027,7 +1067,8 @@ export default function AddSalePage() {
                                     >
                                       <div>{p.name}</div>
                                       <div className="text-[11px] text-[var(--color-text-muted)]">
-                                        {p.product_code} • {p.unit_name || 'Unit'}
+                                        {p.product_code}
+                                        {p.hsn_code ? ` • HSN: ${p.hsn_code}` : ''} • {p.unit_name || 'Unit'}
                                       </div>
                                     </button>
                                   ))}

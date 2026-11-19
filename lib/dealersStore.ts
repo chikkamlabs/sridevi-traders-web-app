@@ -38,7 +38,7 @@ export interface DealerInput {
   status?: boolean;
   opening_firm_id?: string;
   opening_balance?: number;
-  opening_balances?: Array<{ firm_id: string; balance: number }>;
+  opening_balances?: Array<{ firm_id: string; balance: number; n_gst_balance?: number }>;
 }
 
 const LOCAL_DEALERS_KEY = 'st_dealers_cache';
@@ -191,13 +191,14 @@ export async function addDealer(
   };
 
   // Consolidate balances from opening_balances array or single opening_firm_id
-  const openingBalancesToInsert: Array<{ firm_id: string; balance: number }> = [];
+  const openingBalancesToInsert: Array<{ firm_id: string; balance: number; n_gst_balance: number }> = [];
   if (dealerInput.opening_balances && dealerInput.opening_balances.length > 0) {
     dealerInput.opening_balances.forEach((ob) => {
       if (ob.firm_id) {
         openingBalancesToInsert.push({
           firm_id: ob.firm_id,
           balance: Number(ob.balance || 0),
+          n_gst_balance: Number(ob.n_gst_balance || 0),
         });
       }
     });
@@ -205,6 +206,7 @@ export async function addDealer(
     openingBalancesToInsert.push({
       firm_id: dealerInput.opening_firm_id,
       balance: Number(dealerInput.opening_balance),
+      n_gst_balance: 0,
     });
   }
 
@@ -237,7 +239,7 @@ export async function addDealer(
           firm_id: ob.firm_id,
           dealer_id: newDealer.id,
           gst_balance: ob.balance,
-          n_gst_balance: 0,
+          n_gst_balance: ob.n_gst_balance,
         }));
 
         const { data: balData, error: balErr } = await supabase
@@ -285,7 +287,7 @@ export async function addDealer(
     firm_id: ob.firm_id,
     dealer_id: newId,
     gst_balance: ob.balance,
-    n_gst_balance: 0,
+    n_gst_balance: ob.n_gst_balance,
     firm_name: firmMap.get(ob.firm_id) || 'Firm',
     updated_at: new Date().toISOString(),
   }));

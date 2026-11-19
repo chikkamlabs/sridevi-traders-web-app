@@ -11,6 +11,7 @@ import {
   SimpleSaleBill,
 } from '@/lib/simple/nsalesStore';
 import { recordSimpleSaleDealerTransaction } from '@/lib/simple/ndealertrasacationsStore';
+import { downloadNsaleReceipt } from '@/lib/simple/downloadNsaleReceipt';
 import { getSimpleUserProfile } from '@/lib/secretProfile';
 import {
   ArrowLeft,
@@ -24,6 +25,7 @@ import {
   Package,
   FileText,
   Save,
+  Download,
 } from 'lucide-react';
 
 interface EditableSaleItemState {
@@ -215,6 +217,37 @@ function SimpleOpenSaleContent() {
     setIsSaving(false);
   };
 
+  const handleDownloadReceipt = () => {
+    if (!sale) return;
+
+    downloadNsaleReceipt({
+      sale_number: sale.sale_number,
+      invoice_number: sale.invoice_number,
+      date: sale.date,
+      firm_name: sale.firm_name || 'Firm',
+      dealer_name: sale.dealer_name || 'Dealer',
+      dealer_phone: sale.dealer_phone || null,
+      n_gst_subtotal: Number(nGstSubtotal || 0),
+      n_gst_total: Number(nGstTotal || 0),
+      notes: sale.notes,
+      items: (sale.items || []).map((item) => {
+        const edited = editableItems[item.id];
+        return {
+          product_name: item.product_name || item.product_id,
+          product_code: item.product_code || '',
+          variant_name: item.variant_name || item.product_variant_id,
+          variant_code: item.variant_code || '',
+          quantity: item.quantity,
+          conversion_factor: item.conversion_factor,
+          base_quantity: item.base_quantity,
+          base_unit_name: item.base_unit_name || '',
+          n_gst_unit_price: Number(edited?.n_gst_unit_price ?? item.n_gst_unit_price ?? 0),
+          n_gst_total_price: Number(edited?.n_gst_total_price ?? item.n_gst_total_price ?? 0),
+        };
+      }),
+    });
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-background)]" suppressHydrationWarning>
       <SimpleHeader
@@ -231,8 +264,8 @@ function SimpleOpenSaleContent() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 min-h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="max-w-6xl mx-auto space-y-6">
-            {/* Back link */}
-            <div className="flex items-center justify-between">
+            {/* Back link & Download */}
+            <div className="flex items-center justify-between gap-3">
               <Link
                 href="/simple/sales"
                 className="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-brand-deep-green)] transition-colors"
@@ -240,6 +273,17 @@ function SimpleOpenSaleContent() {
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back to Sales</span>
               </Link>
+
+              {sale && (
+                <button
+                  type="button"
+                  onClick={handleDownloadReceipt}
+                  className="btn btn-primary btn-sm inline-flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </button>
+              )}
             </div>
 
             {error && (

@@ -64,6 +64,7 @@ function OpenProductContent() {
 
   // Editable Product Fields
   const [name, setName] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [baseUnitId, setBaseUnitId] = useState('');
   const [minimumStock, setMinimumStock] = useState<number | string>('0');
@@ -112,6 +113,7 @@ function OpenProductContent() {
       if (prod) {
         setProduct(prod);
         setName(prod.name || '');
+        setHsnCode(prod.hsn_code || '');
         setCategoryId(prod.category_id || (cats[0]?.id || ''));
         setBaseUnitId(prod.base_unit_id || (uns[0]?.id || ''));
         setMinimumStock(prod.minimum_stock ?? 0);
@@ -273,6 +275,7 @@ function OpenProductContent() {
       // 1. Update Product Details (excluding product_code)
       const { data: updatedProd, error: updateErr } = await updateProduct(product.id, {
         name: cleanName,
+        hsn_code: hsnCode.trim(),
         category_id: categoryId,
         base_unit_id: baseUnitId,
         minimum_stock: minStockNum,
@@ -462,6 +465,22 @@ function OpenProductContent() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       className="input-field text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  {/* HSN Code */}
+                  <div className="form-group mb-0">
+                    <label htmlFor="edit-product-hsn-code" className="form-label">
+                      HSN Code
+                    </label>
+                    <input
+                      id="edit-product-hsn-code"
+                      type="text"
+                      value={hsnCode}
+                      onChange={(e) => setHsnCode(e.target.value)}
+                      placeholder="e.g. 10063020"
+                      className="input-field text-sm font-mono"
                       disabled={isSaving}
                     />
                   </div>

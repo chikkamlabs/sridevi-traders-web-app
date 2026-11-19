@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import AdminHeader from '@/components/admin/header';
 import AdminSidebar from '@/components/admin/sidebar';
+import AddStockMovementModal from '@/components/admin/addstockmovement';
 import { getStockMovements, StockMovement } from '@/lib/stockmovements';
 import { getStoredAuthUser } from '@/lib/auth';
 import {
@@ -33,6 +34,7 @@ export default function StockMovementsDashboardPage() {
   const [fromDate, setFromDate] = useState(todayStr);
   const [toDate, setToDate] = useState(todayStr);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const loadMovements = useCallback(async (from: string, to: string) => {
     setLoading(true);
@@ -115,9 +117,10 @@ export default function StockMovementsDashboardPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                {/* Stock Movement Button (Just create button no action) */}
+                {/* Stock Movement Button */}
                 <button
                   type="button"
+                  onClick={() => setIsAddModalOpen(true)}
                   className="btn btn-primary flex items-center gap-2 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
@@ -287,6 +290,12 @@ export default function StockMovementsDashboardPage() {
           </div>
         </main>
       </div>
+
+      <AddStockMovementModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onMovementsAdded={() => loadMovements(fromDate, toDate)}
+      />
     </div>
   );
 }

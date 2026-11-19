@@ -40,7 +40,7 @@ export interface SupplierInput {
   status?: boolean;
   opening_firm_id?: string;
   opening_balance?: number;
-  opening_balances?: Array<{ firm_id: string; balance: number }>;
+  opening_balances?: Array<{ firm_id: string; balance: number; n_gst_balance?: number }>;
 }
 
 const LOCAL_SUPPLIERS_KEY = 'st_suppliers_cache';
@@ -201,13 +201,14 @@ export async function addSupplier(
   };
 
   // Consolidate balances from opening_balances array or single opening_firm_id
-  const openingBalancesToInsert: Array<{ firm_id: string; balance: number }> = [];
+  const openingBalancesToInsert: Array<{ firm_id: string; balance: number; n_gst_balance: number }> = [];
   if (supplierInput.opening_balances && supplierInput.opening_balances.length > 0) {
     supplierInput.opening_balances.forEach((ob) => {
       if (ob.firm_id) {
         openingBalancesToInsert.push({
           firm_id: ob.firm_id,
           balance: Number(ob.balance || 0),
+          n_gst_balance: Number(ob.n_gst_balance || 0),
         });
       }
     });
@@ -215,6 +216,7 @@ export async function addSupplier(
     openingBalancesToInsert.push({
       firm_id: supplierInput.opening_firm_id,
       balance: Number(supplierInput.opening_balance),
+      n_gst_balance: 0,
     });
   }
 
@@ -247,7 +249,7 @@ export async function addSupplier(
           firm_id: ob.firm_id,
           supplier_id: newSupplier.id,
           gst_balance: ob.balance,
-          n_gst_balance: 0,
+          n_gst_balance: ob.n_gst_balance,
         }));
 
         const { data: balData, error: balErr } = await supabase
@@ -295,7 +297,7 @@ export async function addSupplier(
     firm_id: ob.firm_id,
     supplier_id: newId,
     gst_balance: ob.balance,
-    n_gst_balance: 0,
+    n_gst_balance: ob.n_gst_balance,
     firm_name: firmMap.get(ob.firm_id) || 'Firm',
     updated_at: new Date().toISOString(),
   }));

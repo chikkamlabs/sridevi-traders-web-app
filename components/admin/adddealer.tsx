@@ -23,9 +23,9 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
 
   // Opening Balances (Multiple Firms)
   const [firms, setFirms] = useState<Firm[]>([]);
-  const [firmBalances, setFirmBalances] = useState<Array<{ firm_id: string; balance: string | number }>>([
-    { firm_id: '', balance: '' },
-  ]);
+  const [firmBalances, setFirmBalances] = useState<
+    Array<{ firm_id: string; balance: string | number; n_gst_balance: string | number }>
+  >([{ firm_id: '', balance: '', n_gst_balance: '' }]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
         if (data.length > 0) {
           setFirmBalances((prev) => {
             if (prev.length === 1 && !prev[0].firm_id) {
-              return [{ firm_id: data[0].id, balance: '' }];
+              return [{ firm_id: data[0].id, balance: '', n_gst_balance: '' }];
             }
             return prev;
           });
@@ -53,7 +53,7 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
     // Pick first firm not already chosen, or fallback to first firm
     const unusedFirm = firms.find((f) => !firmBalances.some((fb) => fb.firm_id === f.id));
     const nextFirmId = unusedFirm ? unusedFirm.id : (firms[0]?.id || '');
-    setFirmBalances((prev) => [...prev, { firm_id: nextFirmId, balance: '' }]);
+    setFirmBalances((prev) => [...prev, { firm_id: nextFirmId, balance: '', n_gst_balance: '' }]);
   };
 
   const handleRemoveFirmBalanceRow = (index: number) => {
@@ -72,6 +72,12 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
     );
   };
 
+  const handleNGstBalanceChange = (index: number, val: string) => {
+    setFirmBalances((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, n_gst_balance: val } : item))
+    );
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,10 +92,16 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
 
     // Format opening balances
     const formattedBalances = firmBalances
-      .filter((fb) => fb.firm_id && fb.balance !== '' && !isNaN(Number(fb.balance)))
+      .filter(
+        (fb) =>
+          fb.firm_id &&
+          ((fb.balance !== '' && !isNaN(Number(fb.balance))) ||
+            (fb.n_gst_balance !== '' && !isNaN(Number(fb.n_gst_balance))))
+      )
       .map((fb) => ({
         firm_id: fb.firm_id,
-        balance: Math.max(0, Number(fb.balance)),
+        balance: Math.max(0, Number(fb.balance || 0)),
+        n_gst_balance: Math.max(0, Number(fb.n_gst_balance || 0)),
       }));
 
     setLoading(true);
@@ -125,7 +137,7 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
         setAddress('');
         setNotes('');
         setStatus(true);
-        setFirmBalances([{ firm_id: firms[0]?.id || '', balance: '' }]);
+        setFirmBalances([{ firm_id: firms[0]?.id || '', balance: '', n_gst_balance: '' }]);
         setSuccess(false);
         setLoading(false);
         onClose();
@@ -299,17 +311,17 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
               </button>
             </div>
             <p className="text-xs text-[var(--color-text-secondary)]">
-              Specify initial GST balance for one or more registered business firms.
+              Specify initial balances for one or more registered business firms (recorded into <code>firm_dealer_balances.gst_balance</code> and <code>firm_dealer_balances.n_gst_balance</code>).
             </p>
 
             <div className="space-y-2.5">
               {firmBalances.map((row, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-2 bg-[var(--color-brand-white)] p-2.5 rounded-lg border border-[var(--color-border)]"
+                  className="flex flex-col sm:flex-row sm:items-center gap-2 bg-[var(--color-brand-white)] p-2.5 rounded-lg border border-[var(--color-border)]"
                 >
                   {/* Select Firm */}
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <label className="sr-only">Select Firm</label>
                     <select
                       value={row.firm_id}
@@ -326,35 +338,59 @@ export default function AddDealerModal({ isOpen, onClose, onDealerAdded }: AddDe
                     </select>
                   </div>
 
-                  {/* Balance Amount */}
-                  <div className="w-36 sm:w-44">
-                    <label className="sr-only">Balance Amount</label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)]">₹</span>
-                      <input
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={row.balance}
-                        onChange={(e) => handleBalanceChange(idx, e.target.value)}
-                        placeholder="0.00"
-                        className="input-field pl-6 text-xs py-1.5"
-                        disabled={loading}
-                      />
+                  <div className="flex items-center gap-2">
+                    {/* GST Opening Balance Amount */}
+                    <div className="flex-1 sm:w-32">
+                      <label className="block text-[10px] font-medium text-[var(--color-text-muted)] mb-0.5">
+                        GST Balance
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)]">₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={row.balance}
+                          onChange={(e) => handleBalanceChange(idx, e.target.value)}
+                          placeholder="0.00"
+                          className="input-field pl-6 text-xs py-1.5"
+                          disabled={loading}
+                        />
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Remove row */}
-                  {firmBalances.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFirmBalanceRow(idx)}
-                      className="p-1.5 rounded-md text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors cursor-pointer shrink-0"
-                      title="Remove row"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                    {/* 2nd Opening Balance (n_gst_balance) */}
+                    <div className="flex-1 sm:w-32">
+                      <label className="block text-[10px] font-medium text-[var(--color-text-muted)] mb-0.5">
+                        2nd Open Balance
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--color-text-muted)]">₹</span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={row.n_gst_balance}
+                          onChange={(e) => handleNGstBalanceChange(idx, e.target.value)}
+                          placeholder="0.00"
+                          className="input-field pl-6 text-xs py-1.5"
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Remove row */}
+                    {firmBalances.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFirmBalanceRow(idx)}
+                        className="p-1.5 mt-4 rounded-md text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors cursor-pointer shrink-0"
+                        title="Remove row"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
 

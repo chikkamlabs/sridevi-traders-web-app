@@ -75,15 +75,23 @@ function OpenSaleContent() {
       invoice_number: sale.invoice_number,
       date: sale.date,
       firm_name: sale.firm_name || 'Firm',
+      firm_gst: sale.firm_gst || null,
+      firm_phone: sale.firm_phone || null,
+      firm_address: sale.firm_address || null,
       dealer_name: sale.dealer_name || 'Dealer',
       dealer_phone: sale.dealer_phone || null,
+      dealer_address: sale.dealer_address || null,
+      dealer_city: sale.dealer_city || null,
+      dealer_gst: sale.dealer_gst || null,
       gst_subtotal: sale.gst_subtotal,
       tax_amount: sale.tax_amount,
+      extra_charges: sale.extra_charges || 0,
       gst_total: sale.gst_total,
       notes: sale.notes,
       items: (sale.items || []).map((item) => ({
         product_name: item.product_name || item.product_id,
         product_code: item.product_code || '',
+        hsn_code: item.hsn_code || '',
         variant_name: item.variant_name || item.product_variant_id,
         variant_code: item.variant_code || '',
         quantity: item.quantity,
@@ -241,18 +249,11 @@ function OpenSaleContent() {
                   </div>
 
                   {/* Financial Summary from sales_bills table */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                     <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
                       <div className="text-[11px] text-[var(--color-text-muted)]">GST Subtotal</div>
                       <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
                         {formatCurrency(sale.gst_subtotal)}
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
-                      <div className="text-[11px] text-[var(--color-text-muted)]">N-GST Subtotal</div>
-                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
-                        {formatCurrency(sale.n_gst_subtotal)}
                       </div>
                     </div>
 
@@ -274,13 +275,6 @@ function OpenSaleContent() {
                       <div className="text-[11px] text-[var(--color-text-secondary)]">GST Total</div>
                       <div className="text-sm font-bold text-[var(--color-brand-deep-green)] mt-0.5">
                         {formatCurrency(sale.gst_total)}
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
-                      <div className="text-[11px] text-[var(--color-text-muted)]">N-GST Total</div>
-                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
-                        {formatCurrency(sale.n_gst_total)}
                       </div>
                     </div>
 
@@ -337,6 +331,7 @@ function OpenSaleContent() {
                     <table className="w-full text-left text-xs sm:text-sm">
                       <thead className="bg-[var(--color-surface-hover)] border-b border-[var(--color-border)] text-[11px] uppercase tracking-wider text-[var(--color-text-secondary)] font-semibold">
                         <tr>
+                          <th className="py-3 px-4">HSN Code</th>
                           <th className="py-3 px-4">Product</th>
                           <th className="py-3 px-4">Variant</th>
                           <th className="py-3 px-4 text-right">Qty</th>
@@ -348,14 +343,12 @@ function OpenSaleContent() {
                           <th className="py-3 px-4 text-right">Tax Rate</th>
                           <th className="py-3 px-4 text-right">Tax Amt</th>
                           <th className="py-3 px-4 text-right">Total Price (GST)</th>
-                          <th className="py-3 px-4 text-right">N-GST Unit</th>
-                          <th className="py-3 px-4 text-right">N-GST Total</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {!sale.items || sale.items.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={12} className="py-10 text-center text-[var(--color-text-muted)]">
                               No items found for this sale bill.
                             </td>
                           </tr>
@@ -365,6 +358,10 @@ function OpenSaleContent() {
                               key={item.id}
                               className="hover:bg-[var(--color-surface-hover)] transition-colors"
                             >
+                              <td className="py-3.5 px-4 font-mono text-xs text-[var(--color-text-secondary)]">
+                                {item.hsn_code || '—'}
+                              </td>
+
                               <td className="py-3.5 px-4">
                                 <div className="font-medium text-[var(--color-text-primary)]">
                                   {item.product_name || item.product_id}
@@ -422,14 +419,6 @@ function OpenSaleContent() {
 
                               <td className="py-3.5 px-4 text-right font-bold text-[var(--color-brand-deep-green)]">
                                 {formatCurrency(item.gst_total_price)}
-                              </td>
-
-                              <td className="py-3.5 px-4 text-right text-[var(--color-text-secondary)]">
-                                {formatCurrency(item.n_gst_unit_price)}
-                              </td>
-
-                              <td className="py-3.5 px-4 text-right text-[var(--color-text-secondary)]">
-                                {formatCurrency(item.n_gst_total_price)}
                               </td>
                             </tr>
                           ))
