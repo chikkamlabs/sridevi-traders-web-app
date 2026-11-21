@@ -37,6 +37,8 @@ export interface SaleReceiptData {
   tax_amount: number;
   extra_charges?: number;
   gst_total: number;
+  old_gst_balance?: number;
+  current_gst_balance?: number;
   notes?: string | null;
   items: SaleReceiptItem[];
 }
@@ -243,12 +245,8 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
   ];
 
   const tableBody = data.items.map((item, idx) => {
-    const prodLabel = item.product_code
-      ? `${item.product_name}\n(${item.product_code})`
-      : item.product_name;
-    const varLabel = item.variant_code
-      ? `${item.variant_name} (${item.variant_code})`
-      : item.variant_name;
+    const prodLabel = item.product_name;
+    const varLabel = item.variant_name;
     const baseQtyLabel = item.base_unit_name
       ? `${item.base_quantity} ${item.base_unit_name}`
       : `${item.base_quantity}`;
@@ -322,11 +320,20 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     : [];
   const notesBlockHeight = hasNotes ? 9 + wrappedNotes.length * 4.5 : 0;
   const summaryBoxHeight = 39;
+  const financialsGap = 5;
+  const financialsBoxHeight = 20;
   const bottomBlockHeight = 36;
   const bottomLimitY = pageHeight - borderBottomMargin - 6;
 
-  // Prevent Bank Details + Totals + Notes overflow
-  if (summaryY + summaryBoxHeight + notesBlockHeight > bottomLimitY) {
+  // Prevent Bank Details + Totals + Financials + Notes overflow
+  if (
+    summaryY +
+      summaryBoxHeight +
+      financialsGap +
+      financialsBoxHeight +
+      notesBlockHeight >
+    bottomLimitY
+  ) {
     doc.addPage();
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
@@ -418,7 +425,43 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     align: 'right',
   });
 
-  let afterSummaryY = summaryY + summaryBoxHeight;
+  const oldGstBalance = Number(data.old_gst_balance ?? 0);
+  const currentGstBalance = Number(
+    data.current_gst_balance ?? oldGstBalance + Number(data.gst_total || 0)
+  );
+
+  const financialsY = summaryY + summaryBoxHeight + financialsGap;
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, financialsY, pageWidth - margin * 2, financialsBoxHeight, 'FD');
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('Financials', margin + 4, financialsY + 6);
+
+  const col1X = margin + 4;
+  const plusX = margin + 62;
+  const col2X = margin + 70;
+  const eqX = margin + 124;
+  const col3X = margin + 132;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.text('Old GST Balance', col1X, financialsY + 11.5);
+  doc.text('This Bill GST Total', col2X, financialsY + 11.5);
+  doc.text('Current GST Balance', col3X, financialsY + 11.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(formatRs(oldGstBalance), col1X, financialsY + 17);
+  doc.text('+', plusX, financialsY + 15);
+  doc.text(formatRs(data.gst_total), col2X, financialsY + 17);
+  doc.text('=', eqX, financialsY + 15);
+  doc.text(formatRs(currentGstBalance), col3X, financialsY + 17);
+
+  let afterSummaryY = financialsY + financialsBoxHeight;
 
   // Optional Notes below Bank Details & Totals
   if (hasNotes) {

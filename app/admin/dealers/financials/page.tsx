@@ -266,6 +266,7 @@ function AdminDealerFinancialsContent() {
                           <th className="py-3.5 px-4">Transaction Type</th>
                           <th className="py-3.5 px-4">Pay Method</th>
                           <th className="py-3.5 px-4 text-right">Amount</th>
+                          <th className="py-3.5 px-4 text-right">Remaining</th>
                           <th className="py-3.5 px-4">Transaction Date</th>
                           <th className="py-3.5 px-4">Notes</th>
                         </tr>
@@ -273,7 +274,7 @@ function AdminDealerFinancialsContent() {
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {transactions.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={7} className="py-10 text-center text-[var(--color-text-muted)]">
                               No transactions recorded for this dealer.
                             </td>
                           </tr>
@@ -294,6 +295,11 @@ function AdminDealerFinancialsContent() {
                               </td>
                               <td className="py-3.5 px-4 text-right font-mono font-semibold text-[var(--color-text-primary)] whitespace-nowrap">
                                 {formatCurrency(tx.amount)}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-mono font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">
+                                {tx.remaining_balance !== null && tx.remaining_balance !== undefined
+                                  ? formatCurrency(tx.remaining_balance)
+                                  : '—'}
                               </td>
                               <td className="py-3.5 px-4 text-[var(--color-text-secondary)] whitespace-nowrap">
                                 {tx.transaction_date}

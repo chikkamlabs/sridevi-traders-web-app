@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import AdminHeader from '@/components/admin/header';
 import AdminSidebar from '@/components/admin/sidebar';
 import { getSaleBillById, SaleBill } from '@/lib/salesStore';
+import { getDealerGstBalances } from '@/lib/dealertrasacationsStore';
 import { downloadSaleReceipt } from '@/lib/downloadSaleReceipt';
 import { getStoredAuthUser } from '@/lib/auth';
 import {
@@ -35,6 +36,7 @@ function OpenSaleContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [adminName, setAdminName] = useState('Admin');
   const [sale, setSale] = useState<SaleBill | null>(null);
+  const [dealerGstBalance, setDealerGstBalance] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +60,9 @@ function OpenSaleContent() {
       const data = await getSaleBillById(saleId);
       if (data) {
         setSale(data);
+        const balances = await getDealerGstBalances(data.dealer_id);
+        const firmBal = balances.find((b) => b.firm_id === data.firm_id);
+        setDealerGstBalance(Number(firmBal?.gst_balance || 0));
       } else {
         setError('Sale bill not found.');
       }
@@ -69,6 +74,9 @@ function OpenSaleContent() {
 
   const handleDownloadReceipt = () => {
     if (!sale) return;
+
+    const currentGstBalance = Number(dealerGstBalance || 0);
+    const oldGstBalance = currentGstBalance - Number(sale.gst_total || 0);
 
     downloadSaleReceipt({
       sale_number: sale.sale_number,
@@ -87,6 +95,8 @@ function OpenSaleContent() {
       tax_amount: sale.tax_amount,
       extra_charges: sale.extra_charges || 0,
       gst_total: sale.gst_total,
+      old_gst_balance: oldGstBalance,
+      current_gst_balance: currentGstBalance,
       notes: sale.notes,
       items: (sale.items || []).map((item) => ({
         product_name: item.product_name || item.product_id,
