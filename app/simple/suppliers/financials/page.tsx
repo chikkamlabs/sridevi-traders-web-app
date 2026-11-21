@@ -42,6 +42,7 @@ function SimpleSupplierFinancialsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddTxModalOpen, setIsAddTxModalOpen] = useState(false);
+  const [taxModeFilter, setTaxModeFilter] = useState<'all' | 'gst' | 'n_gst'>('all');
 
   const refreshFinanceData = useCallback(async (id: string) => {
     const [balData, txData] = await Promise.all([
@@ -94,6 +95,11 @@ function SimpleSupplierFinancialsContent() {
     (sum, b) => sum + Number(b.n_gst_balance || 0),
     0
   );
+
+  const filteredTransactions =
+    taxModeFilter === 'all'
+      ? transactions
+      : transactions.filter((tx) => tx.tax_mode === taxModeFilter);
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--color-background)]" suppressHydrationWarning>
@@ -251,7 +257,7 @@ function SimpleSupplierFinancialsContent() {
 
                 {/* All Supplier Transactions Card */}
                 <div className="bg-[var(--color-brand-white)] rounded-xl border border-[var(--color-border)] shadow-xs overflow-hidden">
-                  <div className="p-5 sm:p-6 border-b border-[var(--color-border)] flex items-center justify-between">
+                  <div className="p-5 sm:p-6 border-b border-[var(--color-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
                       <div className="p-2 rounded-lg bg-[var(--color-brand-light-green)] text-[var(--color-brand-deep-green)]">
                         <Receipt className="w-5 h-5" />
@@ -265,9 +271,27 @@ function SimpleSupplierFinancialsContent() {
                         </p>
                       </div>
                     </div>
-                    <span className="badge badge-primary">
-                      {transactions.length} Transactions
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-0.5">
+                        {(['all', 'gst', 'n_gst'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => setTaxModeFilter(mode)}
+                            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              taxModeFilter === mode
+                                ? 'bg-[var(--color-brand-deep-green)] text-white'
+                                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                            }`}
+                          >
+                            {mode === 'all' ? 'All' : mode === 'gst' ? 'GST' : 'N-GST'}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="badge badge-primary">
+                        {filteredTransactions.length} Transactions
+                      </span>
+                    </div>
                   </div>
 
                   <div className="overflow-x-auto">
@@ -279,19 +303,20 @@ function SimpleSupplierFinancialsContent() {
                           <th className="py-3.5 px-4">Pay Method</th>
                           <th className="py-3.5 px-4">Tax Mode</th>
                           <th className="py-3.5 px-4 text-right">Amount</th>
+                          <th className="py-3.5 px-4 text-right">Remaining</th>
                           <th className="py-3.5 px-4">Transaction Date</th>
                           <th className="py-3.5 px-4">Notes</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
-                        {transactions.length === 0 ? (
+                        {filteredTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan={7} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={8} className="py-10 text-center text-[var(--color-text-muted)]">
                               No transactions recorded for this supplier.
                             </td>
                           </tr>
                         ) : (
-                          transactions.map((tx) => (
+                          filteredTransactions.map((tx) => (
                             <tr
                               key={tx.id}
                               className="hover:bg-[var(--color-surface-hover)] transition-colors"
@@ -312,6 +337,11 @@ function SimpleSupplierFinancialsContent() {
                               </td>
                               <td className="py-3.5 px-4 text-right font-mono font-semibold text-[var(--color-text-primary)] whitespace-nowrap">
                                 {formatCurrency(tx.amount)}
+                              </td>
+                              <td className="py-3.5 px-4 text-right font-mono font-semibold text-[var(--color-text-secondary)] whitespace-nowrap">
+                                {tx.remaining_balance !== null && tx.remaining_balance !== undefined
+                                  ? formatCurrency(tx.remaining_balance)
+                                  : '—'}
                               </td>
                               <td className="py-3.5 px-4 text-[var(--color-text-secondary)] whitespace-nowrap">
                                 {tx.transaction_date}

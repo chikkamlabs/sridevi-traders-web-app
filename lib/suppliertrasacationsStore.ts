@@ -19,6 +19,7 @@ export interface SupplierTransaction {
   transaction_type: SupplierTransactionType;
   payment_method: PaymentMethod;
   amount: number;
+  remaining_balance?: number | null;
   tax_mode: TaxMode;
   reference_type: string;
   reference_id?: string | null;
@@ -36,6 +37,7 @@ export interface SupplierTransactionInput {
   transaction_type: SupplierTransactionType;
   payment_method: PaymentMethod;
   amount: number;
+  remaining_balance?: number | null;
   tax_mode?: TaxMode;
   reference_type: string;
   reference_id?: string | null;
@@ -127,6 +129,9 @@ export async function addSupplierTransaction(
     transaction_type: input.transaction_type,
     payment_method: input.payment_method,
     amount: amountNum,
+    ...(input.remaining_balance !== undefined
+      ? { remaining_balance: input.remaining_balance }
+      : {}),
     tax_mode: input.tax_mode || 'gst',
     reference_type: input.reference_type,
     reference_id: input.reference_id || null,
@@ -158,6 +163,10 @@ export async function addSupplierTransaction(
         transaction_type: data.transaction_type,
         payment_method: data.payment_method,
         amount: Number(data.amount),
+        remaining_balance:
+          data.remaining_balance !== null && data.remaining_balance !== undefined
+            ? Number(data.remaining_balance)
+            : null,
         tax_mode: data.tax_mode,
         reference_type: data.reference_type,
         reference_id: data.reference_id,
@@ -281,12 +290,51 @@ export async function recordPurchaseSupplierTransaction(params: {
   transaction_date: string;
   notes?: string | null;
 }): Promise<{ data: SupplierTransaction | null; error: string | null }> {
+  let existingGstBalance = 0;
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data: existingBal, error: fetchErr } = await supabase
+        .from('firm_supplier_balances')
+        .select('gst_balance')
+        .eq('firm_id', params.firm_id)
+        .eq('supplier_id', params.supplier_id)
+        .maybeSingle();
+
+      if (fetchErr) {
+        return { data: null, error: fetchErr.message };
+      }
+
+      existingGstBalance = Number(existingBal?.gst_balance || 0);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Failed to fetch existing supplier GST balance.';
+      return { data: null, error: msg };
+    }
+  } else if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(LOCAL_SUPPLIER_BALANCES_KEY);
+      const balances: any[] = raw ? JSON.parse(raw) : [];
+      const existingBal = balances.find(
+        (b) => b.firm_id === params.firm_id && b.supplier_id === params.supplier_id
+      );
+      existingGstBalance = Number(existingBal?.gst_balance || 0);
+    } catch {
+      existingGstBalance = 0;
+    }
+  }
+
+  const remainingBalance = existingGstBalance + Number(params.amount || 0);
+
   const txResult = await addSupplierTransaction({
     firm_id: params.firm_id,
     supplier_id: params.supplier_id,
     transaction_type: 'purchase',
     payment_method: 'NA',
     amount: params.amount,
+    remaining_balance: remainingBalance,
     tax_mode: 'gst',
     reference_type: 'purchase',
     reference_id: params.purchase_id,
@@ -415,6 +463,7 @@ export async function getSupplierGstTransactions(
           transaction_type,
           payment_method,
           amount,
+          remaining_balance,
           tax_mode,
           reference_type,
           reference_id,
@@ -440,6 +489,10 @@ export async function getSupplierGstTransactions(
           transaction_type: tx.transaction_type,
           payment_method: tx.payment_method,
           amount: Number(tx.amount || 0),
+          remaining_balance:
+            tx.remaining_balance !== null && tx.remaining_balance !== undefined
+              ? Number(tx.remaining_balance)
+              : null,
           tax_mode: tx.tax_mode,
           reference_type: tx.reference_type,
           reference_id: tx.reference_id || null,
@@ -464,6 +517,10 @@ export async function getSupplierGstTransactions(
       ...tx,
       firm_name: firmMap.get(tx.firm_id) || 'Firm',
       amount: Number(tx.amount || 0),
+      remaining_balance:
+        tx.remaining_balance !== null && tx.remaining_balance !== undefined
+          ? Number(tx.remaining_balance)
+          : null,
     }));
 }
 
@@ -486,9 +543,48 @@ export async function addSupplierGstTransactionAndUpdateBalance(
     return { data: null, error: 'Amount must be greater than 0.' };
   }
 
+  let existingGstBalance = 0;
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data: existingBal, error: fetchErr } = await supabase
+        .from('firm_supplier_balances')
+        .select('gst_balance')
+        .eq('firm_id', input.firm_id)
+        .eq('supplier_id', input.supplier_id)
+        .maybeSingle();
+
+      if (fetchErr) {
+        return { data: null, error: fetchErr.message };
+      }
+
+      existingGstBalance = Number(existingBal?.gst_balance || 0);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Failed to fetch existing supplier GST balance.';
+      return { data: null, error: msg };
+    }
+  } else if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(LOCAL_SUPPLIER_BALANCES_KEY);
+      const balances: any[] = raw ? JSON.parse(raw) : [];
+      const existingBal = balances.find(
+        (b) => b.firm_id === input.firm_id && b.supplier_id === input.supplier_id
+      );
+      existingGstBalance = Number(existingBal?.gst_balance || 0);
+    } catch {
+      existingGstBalance = 0;
+    }
+  }
+
+  const remainingBalance = existingGstBalance - amountNum;
+
   const txResult = await addSupplierTransaction({
     ...input,
     amount: amountNum,
+    remaining_balance: remainingBalance,
     tax_mode: 'gst',
     reference_type: input.reference_type?.trim() || 'manual',
     reference_id: input.reference_id?.trim() || null,

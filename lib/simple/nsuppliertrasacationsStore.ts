@@ -88,6 +88,9 @@ export async function addSimpleSupplierTransaction(
     transaction_type: input.transaction_type,
     payment_method: input.payment_method,
     amount: amountNum,
+    ...(input.remaining_balance !== undefined
+      ? { remaining_balance: input.remaining_balance }
+      : {}),
     tax_mode: input.tax_mode || 'n_gst',
     reference_type: input.reference_type,
     reference_id: input.reference_id || null,
@@ -119,6 +122,10 @@ export async function addSimpleSupplierTransaction(
         transaction_type: data.transaction_type,
         payment_method: data.payment_method,
         amount: Number(data.amount),
+        remaining_balance:
+          data.remaining_balance !== null && data.remaining_balance !== undefined
+            ? Number(data.remaining_balance)
+            : null,
         tax_mode: data.tax_mode,
         reference_type: data.reference_type,
         reference_id: data.reference_id,
@@ -242,12 +249,51 @@ export async function recordSimplePurchaseSupplierTransaction(params: {
   transaction_date: string;
   notes?: string | null;
 }): Promise<{ data: SupplierTransaction | null; error: string | null }> {
+  let existingNGstBalance = 0;
+
+  if (isSupabaseConfigured) {
+    try {
+      const { data: existingBal, error: fetchErr } = await supabase
+        .from('firm_supplier_balances')
+        .select('n_gst_balance')
+        .eq('firm_id', params.firm_id)
+        .eq('supplier_id', params.supplier_id)
+        .maybeSingle();
+
+      if (fetchErr) {
+        return { data: null, error: fetchErr.message };
+      }
+
+      existingNGstBalance = Number(existingBal?.n_gst_balance || 0);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Failed to fetch existing supplier N-GST balance.';
+      return { data: null, error: msg };
+    }
+  } else if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(LOCAL_SUPPLIER_BALANCES_KEY);
+      const balances: any[] = raw ? JSON.parse(raw) : [];
+      const existingBal = balances.find(
+        (b) => b.firm_id === params.firm_id && b.supplier_id === params.supplier_id
+      );
+      existingNGstBalance = Number(existingBal?.n_gst_balance || 0);
+    } catch {
+      existingNGstBalance = 0;
+    }
+  }
+
+  const remainingBalance = existingNGstBalance + Number(params.amount || 0);
+
   const txResult = await addSimpleSupplierTransaction({
     firm_id: params.firm_id,
     supplier_id: params.supplier_id,
     transaction_type: 'purchase',
     payment_method: 'NA',
     amount: params.amount,
+    remaining_balance: remainingBalance,
     tax_mode: 'n_gst',
     reference_type: 'purchase',
     reference_id: params.purchase_id,

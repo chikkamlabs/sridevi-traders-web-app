@@ -16,6 +16,7 @@ export interface SimpleDealerTransactionRow {
   transaction_type: string;
   payment_method: string;
   amount: number;
+  remaining_balance?: number | null;
   tax_mode: string;
   reference_type: string;
   reference_id?: string | null;
@@ -205,6 +206,7 @@ export async function getSimpleDealerTransactions(
           transaction_type,
           payment_method,
           amount,
+          remaining_balance,
           tax_mode,
           reference_type,
           reference_id,
@@ -229,6 +231,10 @@ export async function getSimpleDealerTransactions(
           transaction_type: tx.transaction_type,
           payment_method: tx.payment_method,
           amount: Number(tx.amount || 0),
+          remaining_balance:
+            tx.remaining_balance !== null && tx.remaining_balance !== undefined
+              ? Number(tx.remaining_balance)
+              : null,
           tax_mode: tx.tax_mode,
           reference_type: tx.reference_type,
           reference_id: tx.reference_id || null,
@@ -253,6 +259,10 @@ export async function getSimpleDealerTransactions(
       ...tx,
       firm_name: firmMap.get(tx.firm_id) || tx.firm_name || 'Firm',
       amount: Number(tx.amount || 0),
+      remaining_balance:
+        tx.remaining_balance !== null && tx.remaining_balance !== undefined
+          ? Number(tx.remaining_balance)
+          : null,
     }));
 }
 
@@ -302,10 +312,28 @@ export async function addSimpleDealerTransactionAndUpdateBalance(
 
   if (isSupabaseConfigured) {
     try {
-      // 1. Insert into dealer_transactions
+      // 1. Fetch existing dealer balance for firm & dealer to compute remaining_balance
+      const { data: existing, error: fetchErr } = await supabase
+        .from('firm_dealer_balances')
+        .select('id, gst_balance, n_gst_balance')
+        .eq('firm_id', input.firm_id)
+        .eq('dealer_id', input.dealer_id)
+        .maybeSingle();
+
+      if (fetchErr) {
+        return { data: null, error: fetchErr.message };
+      }
+
+      const existingBalance =
+        input.tax_mode === 'gst'
+          ? Number(existing?.gst_balance || 0)
+          : Number(existing?.n_gst_balance || 0);
+      const remainingBalance = existingBalance + signedDelta;
+
+      // 2. Insert into dealer_transactions with remaining_balance
       const { data: txData, error: txErr } = await supabase
         .from('dealer_transactions')
-        .insert([payload])
+        .insert([{ ...payload, remaining_balance: remainingBalance }])
         .select()
         .single();
 
@@ -316,19 +344,8 @@ export async function addSimpleDealerTransactionAndUpdateBalance(
         };
       }
 
-      // 2. Update firm_dealer_balances.gst_balance (if tax_mode = gst) or n_gst_balance (if tax_mode = n_gst)
+      // 3. Update firm_dealer_balances.gst_balance (if tax_mode = gst) or n_gst_balance (if tax_mode = n_gst)
       if (input.tax_mode === 'gst' || input.tax_mode === 'n_gst') {
-        const { data: existing, error: fetchErr } = await supabase
-          .from('firm_dealer_balances')
-          .select('id, gst_balance, n_gst_balance')
-          .eq('firm_id', input.firm_id)
-          .eq('dealer_id', input.dealer_id)
-          .maybeSingle();
-
-        if (fetchErr) {
-          return { data: null, error: fetchErr.message };
-        }
-
         const nowIso = new Date().toISOString();
         if (existing) {
           const updateFields =
@@ -376,6 +393,10 @@ export async function addSimpleDealerTransactionAndUpdateBalance(
         transaction_type: txData.transaction_type,
         payment_method: txData.payment_method,
         amount: Number(txData.amount),
+        remaining_balance:
+          txData.remaining_balance !== null && txData.remaining_balance !== undefined
+            ? Number(txData.remaining_balance)
+            : null,
         tax_mode: txData.tax_mode,
         reference_type: txData.reference_type,
         reference_id: txData.reference_id || null,
@@ -405,9 +426,19 @@ export async function addSimpleDealerTransactionAndUpdateBalance(
   }
 
   // Local fallback
+  const localBal = getLocalBalances().find(
+    (b) => b.firm_id === input.firm_id && b.dealer_id === input.dealer_id
+  );
+  const existingLocalBalance =
+    input.tax_mode === 'gst'
+      ? Number(localBal?.gst_balance || 0)
+      : Number(localBal?.n_gst_balance || 0);
+  const localRemainingBalance = existingLocalBalance + signedDelta;
+
   const localTx: SimpleDealerTransactionRow = {
     id: 'dtx-' + Math.random().toString(36).substring(2, 10),
     ...payload,
+    remaining_balance: localRemainingBalance,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };

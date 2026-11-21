@@ -11,6 +11,10 @@ import {
   SimpleSaleBill,
 } from '@/lib/simple/nsalesStore';
 import { recordSimpleSaleDealerTransaction } from '@/lib/simple/ndealertrasacationsStore';
+import {
+  getSimpleDealerBalances,
+  getSimpleDealerTransactions,
+} from '@/lib/simple/ndealersFinanceStore';
 import { downloadNsaleReceipt } from '@/lib/simple/downloadNsaleReceipt';
 import { getSimpleUserProfile } from '@/lib/secretProfile';
 import {
@@ -48,6 +52,8 @@ function SimpleOpenSaleContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [simpleName, setSimpleName] = useState('');
   const [sale, setSale] = useState<SimpleSaleBill | null>(null);
+  const [dealerNGstBalance, setDealerNGstBalance] = useState<number>(0);
+  const [hasSavedNGstTx, setHasSavedNGstTx] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +96,16 @@ function SimpleOpenSaleContent() {
           };
         }
         setEditableItems(itemsState);
+
+        const [balances, txs] = await Promise.all([
+          getSimpleDealerBalances(data.dealer_id),
+          getSimpleDealerTransactions(data.dealer_id),
+        ]);
+        const firmBal = balances.find((b) => b.firm_id === data.firm_id);
+        setDealerNGstBalance(Number(firmBal?.n_gst_balance || 0));
+        setHasSavedNGstTx(
+          txs.some((t) => t.reference_id === data.id && t.tax_mode === 'n_gst')
+        );
       } else {
         setError('Sale bill not found.');
       }
@@ -213,12 +229,25 @@ function SimpleOpenSaleContent() {
       setNGstTotal(Number(refreshed.n_gst_total || 0).toFixed(2));
     }
 
+    const balances = await getSimpleDealerBalances(sale.dealer_id);
+    const firmBal = balances.find((b) => b.firm_id === sale.firm_id);
+    setDealerNGstBalance(Number(firmBal?.n_gst_balance || 0));
+    setHasSavedNGstTx(true);
+
     setSuccessMsg('N-GST sale details, dealer transaction, and dealer N-GST balance saved successfully.');
     setIsSaving(false);
   };
 
   const handleDownloadReceipt = () => {
     if (!sale) return;
+
+    const billNGstTotal = Number(nGstTotal || 0);
+    const currentNGstBalance = hasSavedNGstTx
+      ? Number(dealerNGstBalance || 0)
+      : Number(dealerNGstBalance || 0) + billNGstTotal;
+    const oldNGstBalance = hasSavedNGstTx
+      ? currentNGstBalance - Number(sale.n_gst_total || billNGstTotal)
+      : Number(dealerNGstBalance || 0);
 
     downloadNsaleReceipt({
       sale_number: sale.sale_number,
@@ -228,7 +257,9 @@ function SimpleOpenSaleContent() {
       dealer_name: sale.dealer_name || 'Dealer',
       dealer_phone: sale.dealer_phone || null,
       n_gst_subtotal: Number(nGstSubtotal || 0),
-      n_gst_total: Number(nGstTotal || 0),
+      n_gst_total: billNGstTotal,
+      old_n_gst_balance: oldNGstBalance,
+      current_n_gst_balance: currentNGstBalance,
       notes: sale.notes,
       items: (sale.items || []).map((item) => {
         const edited = editableItems[item.id];

@@ -28,6 +28,8 @@ export interface NSaleReceiptData {
   dealer_city?: string | null;
   n_gst_subtotal: number;
   n_gst_total: number;
+  old_n_gst_balance?: number;
+  current_n_gst_balance?: number;
   notes?: string | null;
   items: NSaleReceiptItem[];
 }
@@ -215,38 +217,27 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
 
   currentY += infoBoxHeight + 8;
 
-  // Items Table (without discount %, discount amount, tax %, tax amount)
+  // Items Table (without HSN Code, product/variant codes, Base Qty, discount, tax)
   const tableHead = [
     [
       '#',
-      'HSN Code',
       'Product',
       'Variant',
       'Qty',
-      'Base Qty',
       'Unit Price',
       'Total',
     ],
   ];
 
   const tableBody = data.items.map((item, idx) => {
-    const prodLabel = item.product_code
-      ? `${item.product_name}\n(${item.product_code})`
-      : item.product_name;
-    const varLabel = item.variant_code
-      ? `${item.variant_name} (${item.variant_code})`
-      : item.variant_name;
-    const baseQtyLabel = item.base_unit_name
-      ? `${item.base_quantity} ${item.base_unit_name}`
-      : `${item.base_quantity}`;
+    const prodLabel = item.product_name;
+    const varLabel = item.variant_name;
 
     return [
       String(idx + 1),
-      item.hsn_code?.trim() || '-',
       prodLabel,
       varLabel,
       String(item.quantity),
-      baseQtyLabel,
       formatRs(item.n_gst_unit_price),
       formatRs(item.n_gst_total_price),
     ];
@@ -260,8 +251,8 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 8,
-      cellPadding: 2.5,
+      fontSize: 8.5,
+      cellPadding: 2.6,
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       lineColor: [0, 0, 0],
@@ -272,7 +263,7 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       fontStyle: 'bold',
-      fontSize: 8,
+      fontSize: 8.5,
       halign: 'center',
       lineColor: [0, 0, 0],
       lineWidth: 0.25,
@@ -281,14 +272,12 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
       fillColor: [255, 255, 255],
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 8 },
-      1: { halign: 'center', cellWidth: 18 },
+      0: { halign: 'center', cellWidth: 10 },
+      1: { halign: 'left', cellWidth: 60 },
       2: { halign: 'left', cellWidth: 44 },
-      3: { halign: 'left', cellWidth: 32 },
-      4: { halign: 'right', cellWidth: 14 },
-      5: { halign: 'right', cellWidth: 20 },
-      6: { halign: 'right', cellWidth: 24 },
-      7: { halign: 'right', cellWidth: 24, fontStyle: 'bold' },
+      3: { halign: 'right', cellWidth: 16 },
+      4: { halign: 'right', cellWidth: 27 },
+      5: { halign: 'right', cellWidth: 27, fontStyle: 'bold' },
     },
   });
 
@@ -300,62 +289,30 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     ? (doc.splitTextToSize(data.notes!.trim(), pageWidth - margin * 2) as string[])
     : [];
   const notesBlockHeight = hasNotes ? 9 + wrappedNotes.length * 4.5 : 0;
-  const summaryBoxHeight = 39;
+  const summaryBoxHeight = 32;
+  const financialsGap = 5;
+  const financialsBoxHeight = 20;
   const bottomBlockHeight = 36;
   const bottomLimitY = pageHeight - borderBottomMargin - 6;
 
-  // Prevent Bank Details + Totals + Notes overflow
-  if (summaryY + summaryBoxHeight + notesBlockHeight > bottomLimitY) {
+  // Prevent Totals + Financials + Notes overflow
+  if (
+    summaryY +
+      summaryBoxHeight +
+      financialsGap +
+      financialsBoxHeight +
+      notesBlockHeight >
+    bottomLimitY
+  ) {
     doc.addPage();
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
     summaryY = 16;
   }
 
-  // Right Box: Subtotal, Total Amount (no GST tax details)
+  // Right Box: Subtotal, Total Amount
   const totalsBoxWidth = 78;
   const totalsBoxX = pageWidth - margin - totalsBoxWidth;
-
-  // Left Box: Bank Details
-  const bankBoxWidth = pageWidth - margin * 2 - totalsBoxWidth - 6;
-  doc.setDrawColor(0, 0, 0);
-  doc.setFillColor(255, 255, 255);
-  doc.setLineWidth(0.3);
-  doc.rect(margin, summaryY, bankBoxWidth, summaryBoxHeight, 'FD');
-
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Bank Details', margin + 4, summaryY + 7);
-
-  drawLabelAndValue(
-    doc,
-    'Account Name:',
-    'SRIDEVI Traders & CO',
-    margin + 4,
-    summaryY + 14.5,
-    { boldValue: true, fontSize: 9 }
-  );
-  drawLabelAndValue(
-    doc,
-    'Account Number:',
-    '120031141040',
-    margin + 4,
-    summaryY + 21,
-    { boldValue: true, fontSize: 9 }
-  );
-  drawLabelAndValue(doc, 'IFSC:', 'CNRB0002776', margin + 4, summaryY + 27.5, {
-    boldValue: true,
-    fontSize: 9,
-  });
-  drawLabelAndValue(
-    doc,
-    'Bank Name:',
-    'CANARA BANK, TANUKU BRANCH',
-    margin + 4,
-    summaryY + 34,
-    { boldValue: false, fontSize: 9 }
-  );
 
   // Totals Box (Right): Subtotal and Total only
   doc.setDrawColor(0, 0, 0);
@@ -367,26 +324,63 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
 
-  doc.text('Subtotal:', totalsBoxX + 4, summaryY + 12);
-  doc.text(formatRs(data.n_gst_subtotal), totalsBoxX + totalsBoxWidth - 4, summaryY + 12, {
+  doc.text('Subtotal:', totalsBoxX + 4, summaryY + 10);
+  doc.text(formatRs(data.n_gst_subtotal), totalsBoxX + totalsBoxWidth - 4, summaryY + 10, {
     align: 'right',
   });
 
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
-  doc.line(totalsBoxX + 4, summaryY + 19, totalsBoxX + totalsBoxWidth - 4, summaryY + 19);
+  doc.line(totalsBoxX + 4, summaryY + 15.5, totalsBoxX + totalsBoxWidth - 4, summaryY + 15.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
-  doc.text('Total:', totalsBoxX + 4, summaryY + 29);
-  doc.text(formatRs(data.n_gst_total), totalsBoxX + totalsBoxWidth - 4, summaryY + 29, {
+  doc.text('Total:', totalsBoxX + 4, summaryY + 24.5);
+  doc.text(formatRs(data.n_gst_total), totalsBoxX + totalsBoxWidth - 4, summaryY + 24.5, {
     align: 'right',
   });
 
-  let afterSummaryY = summaryY + summaryBoxHeight;
+  // Financials Box: Old N-GST Balance + This Bill N-GST Total = Current N-GST Balance
+  const oldNGstBalance = Number(data.old_n_gst_balance ?? 0);
+  const currentNGstBalance = Number(
+    data.current_n_gst_balance ?? oldNGstBalance + Number(data.n_gst_total || 0)
+  );
 
-  // Optional Notes below Bank Details & Totals
+  const financialsY = summaryY + summaryBoxHeight + financialsGap;
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, financialsY, pageWidth - margin * 2, financialsBoxHeight, 'FD');
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('Financials', margin + 4, financialsY + 6);
+
+  const col1X = margin + 4;
+  const plusX = margin + 62;
+  const col2X = margin + 70;
+  const eqX = margin + 124;
+  const col3X = margin + 132;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.text('Old N-GST Balance', col1X, financialsY + 11.5);
+  doc.text('This Bill N-GST Total', col2X, financialsY + 11.5);
+  doc.text('Current N-GST Balance', col3X, financialsY + 11.5);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(formatRs(oldNGstBalance), col1X, financialsY + 17);
+  doc.text('+', plusX, financialsY + 15);
+  doc.text(formatRs(data.n_gst_total), col2X, financialsY + 17);
+  doc.text('=', eqX, financialsY + 15);
+  doc.text(formatRs(currentNGstBalance), col3X, financialsY + 17);
+
+  let afterSummaryY = financialsY + financialsBoxHeight;
+
+  // Optional Notes below Financials
   if (hasNotes) {
     const notesY = afterSummaryY + 8;
     doc.setFont('helvetica', 'bold');
@@ -400,7 +394,7 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     afterSummaryY = notesY + 5 + wrappedNotes.length * 4.5;
   }
 
-  // Bottom Section: Transportation Details (Bottom Left) & Authorised Signatory (Bottom Right)
+  // Bottom Section: Authorised Signatory (Bottom Right)
   let bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
   if (afterSummaryY + 8 > bottomBlockY) {
     doc.addPage();
@@ -408,27 +402,6 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
     bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
   }
-
-  // Bottom Left Box: Transportation Details (Name, Vehicle Number)
-  const transportBoxWidth = 96;
-  doc.setDrawColor(0, 0, 0);
-  doc.setFillColor(255, 255, 255);
-  doc.setLineWidth(0.3);
-  doc.rect(margin, bottomBlockY, transportBoxWidth, bottomBlockHeight, 'FD');
-
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Transportation Details', margin + 4, bottomBlockY + 7.5);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('Name:', margin + 4, bottomBlockY + 17);
-  doc.setLineWidth(0.2);
-  doc.line(margin + 17, bottomBlockY + 17.5, margin + transportBoxWidth - 4, bottomBlockY + 17.5);
-
-  doc.text('Vehicle Number:', margin + 4, bottomBlockY + 27.5);
-  doc.line(margin + 33, bottomBlockY + 28, margin + transportBoxWidth - 4, bottomBlockY + 28);
 
   // Bottom Right Box: Authorised Signatory (Name, Date, Sign)
   const signBoxWidth = 78;
