@@ -10,6 +10,7 @@ export interface SimpleSaleBillItem {
   product_id: string;
   product_variant_id: string;
   quantity: number;
+  sale_unit?: string | null;
   conversion_factor: number;
   base_quantity: number;
   discount_amount: number;
@@ -49,6 +50,8 @@ export interface SimpleSaleBill {
   firm_name?: string;
   dealer_name?: string;
   dealer_phone?: string | null;
+  dealer_address?: string | null;
+  dealer_city?: string | null;
   items?: SimpleSaleBillItem[];
   created_at?: string;
   updated_at?: string;
@@ -230,7 +233,7 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
           created_at,
           updated_at,
           firms ( name ),
-          dealers ( name, phone )
+          dealers ( name, phone, city, address )
         `)
         .eq('id', id)
         .maybeSingle();
@@ -244,6 +247,7 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
             product_id,
             product_variant_id,
             quantity,
+            sale_unit,
             conversion_factor,
             base_quantity,
             discount_amount,
@@ -268,6 +272,7 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
           product_id: item.product_id,
           product_variant_id: item.product_variant_id,
           quantity: Number(item.quantity || 0),
+          sale_unit: item.sale_unit || null,
           conversion_factor: Number(item.conversion_factor || 0),
           base_quantity: Number(item.base_quantity || 0),
           discount_amount: Number(item.discount_amount || 0),
@@ -308,6 +313,8 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
           firm_name: s.firms?.name || 'Firm',
           dealer_name: s.dealers?.name || 'Dealer',
           dealer_phone: s.dealers?.phone || null,
+          dealer_address: s.dealers?.address || null,
+          dealer_city: s.dealers?.city || null,
           items: formattedItems,
           created_at: s.created_at,
           updated_at: s.updated_at,
@@ -353,6 +360,8 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
     firm_name: firm?.name || found.firm_name || 'Firm',
     dealer_name: dealer?.name || found.dealer_name || 'Dealer',
     dealer_phone: dealer?.phone || found.dealer_phone || null,
+    dealer_address: dealer?.address || found.dealer_address || null,
+    dealer_city: dealer?.city || found.dealer_city || null,
     items,
   };
 }

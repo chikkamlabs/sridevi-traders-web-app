@@ -256,6 +256,8 @@ function SimpleOpenSaleContent() {
       firm_name: sale.firm_name || 'Firm',
       dealer_name: sale.dealer_name || 'Dealer',
       dealer_phone: sale.dealer_phone || null,
+      dealer_address: sale.dealer_address || null,
+      dealer_city: sale.dealer_city || null,
       n_gst_subtotal: Number(nGstSubtotal || 0),
       n_gst_total: billNGstTotal,
       old_n_gst_balance: oldNGstBalance,
@@ -270,6 +272,7 @@ function SimpleOpenSaleContent() {
           variant_name: item.variant_name || item.product_variant_id,
           variant_code: item.variant_code || '',
           quantity: item.quantity,
+          sale_unit: item.sale_unit || null,
           conversion_factor: item.conversion_factor,
           base_quantity: item.base_quantity,
           base_unit_name: item.base_unit_name || '',
@@ -553,6 +556,7 @@ function SimpleOpenSaleContent() {
                           <th className="py-3 px-4">Product</th>
                           <th className="py-3 px-4">Variant</th>
                           <th className="py-3 px-4 text-right">Qty</th>
+                          <th className="py-3 px-4">Sale Unit</th>
                           <th className="py-3 px-4 text-right">Conv. Factor</th>
                           <th className="py-3 px-4 text-right">Base Qty</th>
                           <th className="py-3 px-4 text-right">Unit Price (GST)</th>
@@ -568,7 +572,7 @@ function SimpleOpenSaleContent() {
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {!sale.items || sale.items.length === 0 ? (
                           <tr>
-                            <td colSpan={14} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={15} className="py-10 text-center text-[var(--color-text-muted)]">
                               No items found for this sale bill.
                             </td>
                           </tr>
@@ -593,26 +597,20 @@ function SimpleOpenSaleContent() {
                                   <div className="font-medium text-[var(--color-text-primary)]">
                                     {item.product_name || item.product_id}
                                   </div>
-                                  {item.product_code && (
-                                    <div className="text-[11px] font-mono text-[var(--color-brand-deep-green)]">
-                                      {item.product_code}
-                                    </div>
-                                  )}
                                 </td>
 
                                 <td className="py-3.5 px-4">
                                   <div className="text-[var(--color-text-primary)]">
                                     {item.variant_name || item.product_variant_id}
                                   </div>
-                                  {item.variant_code && (
-                                    <div className="text-[11px] font-mono text-[var(--color-text-muted)]">
-                                      {item.variant_code}
-                                    </div>
-                                  )}
                                 </td>
 
                                 <td className="py-3.5 px-4 text-right font-medium text-[var(--color-text-primary)]">
                                   {item.quantity}
+                                </td>
+
+                                <td className="py-3.5 px-4 text-[var(--color-text-secondary)]">
+                                  {item.sale_unit || '—'}
                                 </td>
 
                                 <td className="py-3.5 px-4 text-right text-[var(--color-text-secondary)]">

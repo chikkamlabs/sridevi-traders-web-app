@@ -10,6 +10,7 @@ export interface SaleBillItem {
   product_id: string;
   product_variant_id: string;
   quantity: number;
+  sale_unit?: string | null;
   conversion_factor: number;
   base_quantity: number;
   discount_amount: number;
@@ -34,6 +35,7 @@ export interface SaleBillItemInput {
   product_id: string;
   product_variant_id: string;
   quantity: number;
+  sale_unit?: string | null;
   conversion_factor: number;
   base_quantity: number;
   discount_amount: number;
@@ -111,8 +113,12 @@ export function generateSaleNumber(): string {
 }
 
 export function generateSaleInvoiceNumber(): string {
-  const random5 = Math.floor(10000 + Math.random() * 90000);
-  return `sale_inv_${random5}`;
+  const now = new Date();
+  const y = String(now.getFullYear()).slice(-1);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const random3 = Math.floor(100 + Math.random() * 900);
+  return `${y}${mm}${dd}${random3}`;
 }
 
 function getLocalSalesBills(): SaleBill[] {
@@ -307,6 +313,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
             product_id,
             product_variant_id,
             quantity,
+            sale_unit,
             conversion_factor,
             base_quantity,
             discount_amount,
@@ -331,6 +338,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           product_id: item.product_id,
           product_variant_id: item.product_variant_id,
           quantity: Number(item.quantity || 0),
+          sale_unit: item.sale_unit || null,
           conversion_factor: Number(item.conversion_factor || 0),
           base_quantity: Number(item.base_quantity || 0),
           discount_amount: Number(item.discount_amount || 0),
@@ -508,6 +516,7 @@ export async function addSaleBill(
         product_id: item.product_id,
         product_variant_id: item.product_variant_id,
         quantity: Number(item.quantity),
+        sale_unit: item.sale_unit?.trim() || null,
         conversion_factor: Number(item.conversion_factor),
         base_quantity: Number(item.base_quantity),
         discount_amount: Number(item.discount_amount || 0),
@@ -554,6 +563,7 @@ export async function addSaleBill(
           product_id: it.product_id,
           product_variant_id: it.product_variant_id,
           quantity: Number(it.quantity),
+          sale_unit: it.sale_unit || null,
           conversion_factor: Number(it.conversion_factor),
           base_quantity: Number(it.base_quantity),
           discount_amount: Number(it.discount_amount),
@@ -598,6 +608,7 @@ export async function addSaleBill(
     product_id: item.product_id,
     product_variant_id: item.product_variant_id,
     quantity: Number(item.quantity),
+    sale_unit: item.sale_unit?.trim() || null,
     conversion_factor: Number(item.conversion_factor),
     base_quantity: Number(item.base_quantity),
     discount_amount: Number(item.discount_amount || 0),
