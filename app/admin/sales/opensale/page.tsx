@@ -345,6 +345,7 @@ function OpenSaleContent() {
                           <th className="py-3 px-4">Product</th>
                           <th className="py-3 px-4">Variant</th>
                           <th className="py-3 px-4 text-right">Qty</th>
+                          <th className="py-3 px-4">Sale Unit</th>
                           <th className="py-3 px-4 text-right">Conv. Factor</th>
                           <th className="py-3 px-4 text-right">Base Qty</th>
                           <th className="py-3 px-4 text-right">Unit Price (GST)</th>
@@ -358,7 +359,7 @@ function OpenSaleContent() {
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {!sale.items || sale.items.length === 0 ? (
                           <tr>
-                            <td colSpan={12} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={13} className="py-10 text-center text-[var(--color-text-muted)]">
                               No items found for this sale bill.
                             </td>
                           </tr>
@@ -376,26 +377,20 @@ function OpenSaleContent() {
                                 <div className="font-medium text-[var(--color-text-primary)]">
                                   {item.product_name || item.product_id}
                                 </div>
-                                {item.product_code && (
-                                  <div className="text-[11px] font-mono text-[var(--color-brand-deep-green)]">
-                                    {item.product_code}
-                                  </div>
-                                )}
                               </td>
 
                               <td className="py-3.5 px-4">
                                 <div className="text-[var(--color-text-primary)]">
                                   {item.variant_name || item.product_variant_id}
                                 </div>
-                                {item.variant_code && (
-                                  <div className="text-[11px] font-mono text-[var(--color-text-muted)]">
-                                    {item.variant_code}
-                                  </div>
-                                )}
                               </td>
 
                               <td className="py-3.5 px-4 text-right font-medium text-[var(--color-text-primary)]">
                                 {item.quantity}
+                              </td>
+
+                              <td className="py-3.5 px-4 text-[var(--color-text-secondary)]">
+                                {item.sale_unit || '—'}
                               </td>
 
                               <td className="py-3.5 px-4 text-right text-[var(--color-text-secondary)]">

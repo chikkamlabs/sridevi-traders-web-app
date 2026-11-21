@@ -8,6 +8,7 @@ export interface NSaleReceiptItem {
   variant_name: string;
   variant_code?: string;
   quantity: number;
+  sale_unit?: string | null;
   conversion_factor: number;
   base_quantity: number;
   base_unit_name?: string;
@@ -47,6 +48,23 @@ function formatRs(value: number): string {
   })}`;
 }
 
+function formatDateDDMMYYYY(dateStr: string | null | undefined): string {
+  if (!dateStr) return '-';
+  const trimmed = dateStr.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (isoMatch) {
+    return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+  }
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const yyyy = parsed.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  }
+  return trimmed;
+}
+
 function drawLabelAndValue(
   doc: jsPDF,
   label: string,
@@ -65,14 +83,7 @@ function drawLabelAndValue(
 }
 
 /**
- * Generates an N-GST Sale Receipt PDF using jspdf and jspdf-autotable
- * in black-and-white with page border, centered Sale Receipt title,
- * firm details (without any GST details), Sale Date & Generated on,
- * enlarged bold Sale & Dealer details, items table using n_gst_unit_price
- * and n_gst_total_price (without discount %, discount amount, tax %, tax amount),
- * Bank Details, Subtotal and Total, Transportation Details (bottom left),
- * and Authorised Signatory (bottom right), then triggers download and opens
- * the PDF in a new tab (target = _blank).
+ * Generates an Invoice PDF using jspdf and jspdf-autotable.
  */
 export function downloadNsaleReceipt(data: NSaleReceiptData): void {
   const doc = new jsPDF({
@@ -88,52 +99,47 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
   const borderBottomMargin = 16; // Raised bottom border line
   const margin = 13;
 
-  const generatedTimestamp = new Date().toLocaleString('en-IN');
-
   // White background and Black text throughout
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
   doc.setTextColor(0, 0, 0);
   doc.setDrawColor(0, 0, 0);
 
-  // Top Middle: "Sale Receipt"
+  // Top Middle: "Invoice"
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
-  doc.text('Sale Receipt', pageWidth / 2, 16.5, { align: 'center' });
+  doc.text('Invoice', pageWidth / 2, 16.5, { align: 'center' });
 
   // Subtle divider under top title
   doc.setLineWidth(0.25);
   doc.line(margin, 20, pageWidth - margin, 20);
 
-  // Header Left: Firm Name, optional Phone, 3-line Address (no GST details)
+  // Header Left: Firm Name, 3-line Address, and Mobile number below address
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.text(data.firm_name || 'Sridevi Traders', margin, 27.5);
 
-  if (data.firm_phone) {
-    drawLabelAndValue(doc, 'Ph:', data.firm_phone, margin, 33.5, {
-      boldValue: true,
-      fontSize: 9,
-    });
-  }
-
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  const addrStartY = data.firm_phone ? 39 : 34.5;
-  doc.text('Address: 36-1-62/1, Surya Nagar,', margin, addrStartY);
-  doc.text('Kommula vari st, Pydiparru,', margin, addrStartY + 5);
-  doc.text('Tanuku - 534211, W.G, A.P', margin, addrStartY + 10);
+  doc.text('Address: 36-1-62/1, Surya Nagar,', margin, 33.5);
+  doc.text('Kommula vari st, Pydiparru,', margin, 38.5);
+  doc.text('Tanuku - 534211, W.G, A.P', margin, 43.5);
 
-  // Header Right: Sale Date & Generated on
+  drawLabelAndValue(doc, 'Mobile number:', '9866802833', margin, 49, {
+    boldValue: true,
+    fontSize: 9,
+  });
+
+  // Header Right: Date (dd-mm-yyyy) & Invoice no
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text(`Sale Date: ${data.date || '-'}`, pageWidth - margin, 27.5, {
+  doc.text(`Date: ${formatDateDDMMYYYY(data.date)}`, pageWidth - margin, 27.5, {
     align: 'right',
   });
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`Generated on: ${generatedTimestamp}`, pageWidth - margin, 33.5, {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(`Invoice no: ${data.invoice_number || '-'}`, pageWidth - margin, 33.5, {
     align: 'right',
   });
 
@@ -142,88 +148,66 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
   doc.setLineWidth(0.35);
   doc.line(margin, 53.5, pageWidth - margin, 53.5);
 
-  // Sale Details & Dealer Details Box
+  // Dealer Details Single Block
   let currentY = 59.5;
-  const fullDealerAddress = [data.dealer_address, data.dealer_city]
-    .filter((v) => Boolean(v && v.trim()))
-    .join(', ');
-  const midX = pageWidth / 2 + 4;
-  const maxDealerAddrWidth = pageWidth - margin - midX - 4;
+  const boxX = margin;
+  const boxWidth = pageWidth - margin * 2;
+  const textX = boxX + 4;
+  const maxDealerAddrWidth = boxWidth - 8;
+
   doc.setFontSize(10);
   const addressPrefix = 'Address: ';
   doc.setFont('helvetica', 'bold');
   const addressPrefixWidth = doc.getTextWidth(addressPrefix);
   doc.setFont('helvetica', 'normal');
   const wrappedDealerAddress = doc.splitTextToSize(
-    fullDealerAddress || '-',
-    Math.max(30, maxDealerAddrWidth - addressPrefixWidth - 1.5)
+    data.dealer_address?.trim() || '-',
+    Math.max(40, maxDealerAddrWidth - addressPrefixWidth - 1.5)
   ) as string[];
 
   const extraAddressLines = Math.max(0, wrappedDealerAddress.length - 1);
-  const infoBoxHeight = 32 + extraAddressLines * 5;
+  const infoBoxHeight = 37 + extraAddressLines * 5;
 
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
-  doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, 'FD');
+  doc.rect(boxX, currentY, boxWidth, infoBoxHeight, 'FD');
 
-  // Vertical divider inside info box
-  doc.line(pageWidth / 2, currentY, pageWidth / 2, currentY + infoBoxHeight);
-
-  // Left Column: Sale Details
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('SALE DETAILS', margin + 4, currentY + 7.5);
+  doc.text('DEALER DETAILS', textX, currentY + 7.5);
 
-  drawLabelAndValue(doc, 'Sale No:', data.sale_number || '-', margin + 4, currentY + 15, {
+  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', textX, currentY + 14.5, {
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(
-    doc,
-    'Invoice No:',
-    data.invoice_number || '-',
-    margin + 4,
-    currentY + 21.5,
-    { boldValue: true, fontSize: 10 }
-  );
-  drawLabelAndValue(doc, 'Sale Date:', data.date || '-', margin + 4, currentY + 28, {
+  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', textX, currentY + 20.5, {
     boldValue: true,
     fontSize: 10,
   });
-
-  // Right Column: Dealer Details
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('DEALER DETAILS', midX, currentY + 7.5);
-
-  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', midX, currentY + 15, {
-    boldValue: true,
-    fontSize: 10,
-  });
-  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', midX, currentY + 21.5, {
+  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', textX, currentY + 26.5, {
     boldValue: true,
     fontSize: 10,
   });
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(addressPrefix, midX, currentY + 28);
+  doc.text(addressPrefix, textX, currentY + 32.5);
   doc.setFont('helvetica', 'normal');
   wrappedDealerAddress.forEach((line, idx) => {
-    doc.text(line, midX + addressPrefixWidth + 1.5, currentY + 28 + idx * 5);
+    doc.text(line, textX + addressPrefixWidth + 1.5, currentY + 32.5 + idx * 5);
   });
 
   currentY += infoBoxHeight + 8;
 
-  // Items Table (without HSN Code, product/variant codes, Base Qty, discount, tax)
+  // Items Table: #, Product, Quantity, Unit, Unit Price, Total
   const tableHead = [
     [
       '#',
       'Product',
-      'Variant',
-      'Qty',
+      'Quantity',
+      'Unit',
       'Unit Price',
       'Total',
     ],
@@ -231,13 +215,13 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
 
   const tableBody = data.items.map((item, idx) => {
     const prodLabel = item.product_name;
-    const varLabel = item.variant_name;
+    const unitLabel = item.sale_unit?.trim() || '-';
 
     return [
       String(idx + 1),
       prodLabel,
-      varLabel,
       String(item.quantity),
+      unitLabel,
       formatRs(item.n_gst_unit_price),
       formatRs(item.n_gst_total_price),
     ];
@@ -273,16 +257,27 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 10 },
-      1: { halign: 'left', cellWidth: 60 },
-      2: { halign: 'left', cellWidth: 44 },
-      3: { halign: 'right', cellWidth: 16 },
+      1: { halign: 'left', cellWidth: 74 },
+      2: { halign: 'right', cellWidth: 22 },
+      3: { halign: 'center', cellWidth: 24 },
       4: { halign: 'right', cellWidth: 27 },
       5: { halign: 'right', cellWidth: 27, fontStyle: 'bold' },
     },
   });
 
   const tableEndY = doc.lastAutoTable?.finalY ?? currentY + 24;
-  let summaryY = tableEndY + 10;
+
+  // Total products count below products list
+  drawLabelAndValue(
+    doc,
+    'Total products:',
+    String(data.items.length),
+    margin,
+    tableEndY + 6.5,
+    { boldValue: true, fontSize: 9.5 }
+  );
+
+  let summaryY = tableEndY + 13;
 
   const hasNotes = Boolean(data.notes && data.notes.trim());
   const wrappedNotes = hasNotes
@@ -341,7 +336,7 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     align: 'right',
   });
 
-  // Financials Box: Old N-GST Balance + This Bill N-GST Total = Current N-GST Balance
+  // Financials Box: Old Balance + Bill Amount = Final Balance
   const oldNGstBalance = Number(data.old_n_gst_balance ?? 0);
   const currentNGstBalance = Number(
     data.current_n_gst_balance ?? oldNGstBalance + Number(data.n_gst_total || 0)
@@ -366,9 +361,9 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.text('Old N-GST Balance', col1X, financialsY + 11.5);
-  doc.text('This Bill N-GST Total', col2X, financialsY + 11.5);
-  doc.text('Current N-GST Balance', col3X, financialsY + 11.5);
+  doc.text('Old Balance', col1X, financialsY + 11.5);
+  doc.text('Bill Amount', col2X, financialsY + 11.5);
+  doc.text('Final Balance', col3X, financialsY + 11.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
@@ -394,7 +389,7 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     afterSummaryY = notesY + 5 + wrappedNotes.length * 4.5;
   }
 
-  // Bottom Section: Authorised Signatory (Bottom Right)
+  // Bottom Right Box: Empty box
   let bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
   if (afterSummaryY + 8 > bottomBlockY) {
     doc.addPage();
@@ -403,30 +398,12 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
     bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
   }
 
-  // Bottom Right Box: Authorised Signatory (Name, Date, Sign)
   const signBoxWidth = 78;
   const signBoxX = pageWidth - margin - signBoxWidth;
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
   doc.rect(signBoxX, bottomBlockY, signBoxWidth, bottomBlockHeight, 'FD');
-
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Authorised Signatory', signBoxX + 4, bottomBlockY + 7.5);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('Name:', signBoxX + 4, bottomBlockY + 15.5);
-  doc.setLineWidth(0.2);
-  doc.line(signBoxX + 17, bottomBlockY + 16, signBoxX + signBoxWidth - 4, bottomBlockY + 16);
-
-  doc.text('Date:', signBoxX + 4, bottomBlockY + 23);
-  doc.line(signBoxX + 15, bottomBlockY + 23.5, signBoxX + signBoxWidth - 4, bottomBlockY + 23.5);
-
-  doc.text('Sign:', signBoxX + 4, bottomBlockY + 30.5);
-  doc.line(signBoxX + 15, bottomBlockY + 31, signBoxX + signBoxWidth - 4, bottomBlockY + 31);
 
   // Draw outer page border on every page (with raised bottom line)
   const totalPages = doc.getNumberOfPages();

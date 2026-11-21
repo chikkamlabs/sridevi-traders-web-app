@@ -9,6 +9,7 @@ import { getFirms, Firm } from '@/lib/firmsStore';
 import { getDealers, Dealer } from '@/lib/dealersStore';
 import { getProducts, Product } from '@/lib/productsStore';
 import { getAllProductVariants, ProductVariant } from '@/lib/productvariantsStore';
+import { getUnits, Unit } from '@/lib/unitsStore';
 import {
   addSaleBill,
   applySaleStockAndMovements,
@@ -40,6 +41,7 @@ interface SaleItemRow {
   product_id: string;
   product_variant_id: string;
   quantity: string;
+  sale_unit: string;
   conversion_factor: string;
   base_quantity: string;
   gst_unit_price: string;
@@ -65,6 +67,7 @@ function createEmptySaleItemRow(): SaleItemRow {
     product_id: '',
     product_variant_id: '',
     quantity: '1',
+    sale_unit: '',
     conversion_factor: '1',
     base_quantity: '1',
     gst_unit_price: '0',
@@ -111,6 +114,7 @@ export default function AddSalePage() {
   const [dealers, setDealers] = useState<Dealer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [allVariants, setAllVariants] = useState<ProductVariant[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
   // Sales Bill Fields
@@ -151,11 +155,12 @@ export default function AddSalePage() {
 
   useEffect(() => {
     const loadInitial = async () => {
-      const [firmsData, dealersData, productsData, variantsData] = await Promise.all([
+      const [firmsData, dealersData, productsData, variantsData, unitsData] = await Promise.all([
         getFirms(),
         getDealers(),
         getProducts(),
         getAllProductVariants(),
+        getUnits(),
       ]);
 
       const user = getStoredAuthUser();
@@ -172,6 +177,7 @@ export default function AddSalePage() {
       setDealers(dealersData);
       setProducts(productsData);
       setAllVariants(variantsData);
+      setUnits(unitsData);
 
       if (firmsData.length > 0) setFirmId(firmsData[0].id);
       if (dealersData.length > 0) setDealerId(dealersData[0].id);
@@ -407,6 +413,7 @@ export default function AddSalePage() {
         product_id: row.product_id,
         product_variant_id: row.product_variant_id,
         quantity: qty,
+        sale_unit: row.sale_unit.trim() || null,
         conversion_factor: conv,
         base_quantity: baseQty,
         gst_unit_price: isNaN(unitPrice) ? 0 : unitPrice,
@@ -794,7 +801,7 @@ export default function AddSalePage() {
                     />
                   </div>
 
-                  {/* Invoice Number (auto filled sale_inv_XXXXX) */}
+                  {/* Invoice Number (auto filled ymmddXXX) */}
                   <div className="form-group mb-0">
                     <div className="flex items-center justify-between mb-1">
                       <label htmlFor="sale-invoice-number" className="form-label mb-0">
@@ -1110,8 +1117,8 @@ export default function AddSalePage() {
                           </div>
                         </div>
 
-                        {/* Quantity, Conversion Factor, Base Quantity, Unit Price (+ Last 5 Purchase Dropdown), MRP */}
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                        {/* Quantity, Sale Unit, Conversion Factor, Base Quantity, Unit Price (+ Last 5 Purchase Dropdown), MRP */}
+                        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
                           <div className="form-group mb-0">
                             <label className="form-label text-xs">
                               Quantity <span className="text-[var(--color-danger)]">*</span>
@@ -1125,6 +1132,23 @@ export default function AddSalePage() {
                               onChange={(e) =>
                                 handleItemFieldChange(idx, 'quantity', e.target.value)
                               }
+                              className="input-field text-xs py-1.5"
+                              disabled={isSaving}
+                            />
+                          </div>
+
+                          <div className="form-group mb-0">
+                            <label className="form-label text-xs">
+                              Sale Unit
+                            </label>
+                            <input
+                              type="text"
+                              list="sale-unit-suggestions"
+                              value={row.sale_unit}
+                              onChange={(e) =>
+                                handleItemFieldChange(idx, 'sale_unit', e.target.value)
+                              }
+                              placeholder="e.g., Bag, Box, KG"
                               className="input-field text-xs py-1.5"
                               disabled={isSaving}
                             />
@@ -1389,6 +1413,11 @@ export default function AddSalePage() {
                 </div>
               </div>
             </form>
+            <datalist id="sale-unit-suggestions">
+              {units.map((u) => (
+                <option key={u.id} value={u.name} />
+              ))}
+            </datalist>
           </div>
         </main>
       </div>
