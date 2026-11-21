@@ -56,6 +56,23 @@ function formatRs(value: number): string {
   })}`;
 }
 
+function formatDateDDMMYYYY(dateStr: string | null | undefined): string {
+  if (!dateStr) return '-';
+  const trimmed = dateStr.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (isoMatch) {
+    return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+  }
+  const parsed = new Date(trimmed);
+  if (!isNaN(parsed.getTime())) {
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const yyyy = parsed.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  }
+  return trimmed;
+}
+
 function drawLabelAndValue(
   doc: jsPDF,
   label: string,
@@ -74,12 +91,7 @@ function drawLabelAndValue(
 }
 
 /**
- * Generates a Sale Receipt PDF using jspdf and jspdf-autotable
- * in black-and-white with page border, centered Sale Receipt title,
- * firm details, Sale Date & Generated on, enlarged bold Sale & Dealer details,
- * HSN code column, Bank Details, Totals with Extra Amount,
- * Transportation Details (bottom left), and Authorised Signatory (bottom right),
- * then triggers download and opens the PDF in a new tab (target = _blank).
+ * Generates a Tax Invoice PDF using jspdf and jspdf-autotable.
  */
 export function downloadSaleReceipt(data: SaleReceiptData): void {
   const doc = new jsPDF({
@@ -95,24 +107,22 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
   const borderBottomMargin = 16; // Raised bottom border line
   const margin = 13;
 
-  const generatedTimestamp = new Date().toLocaleString('en-IN');
-
   // White background and Black text throughout
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
   doc.setTextColor(0, 0, 0);
   doc.setDrawColor(0, 0, 0);
 
-  // Top Middle: "Sale Receipt"
+  // Top Middle: "Tax Invoice"
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
-  doc.text('Sale Receipt', pageWidth / 2, 16.5, { align: 'center' });
+  doc.text('Tax Invoice', pageWidth / 2, 16.5, { align: 'center' });
 
   // Subtle divider under top title
   doc.setLineWidth(0.25);
   doc.line(margin, 20, pageWidth - margin, 20);
 
-  // Header Left: Firm Name, GST Number, 3-line Address
+  // Header Left: Firm Name, GST Number, 3-line Address, and Mobile number below address
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.text(data.firm_name || 'Sridevi Traders', margin, 27.5);
@@ -121,119 +131,100 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
   drawLabelAndValue(
     doc,
     'GST Number:',
-    `${data.firm_gst || '-'}${data.firm_phone ? `  |  Ph: ${data.firm_phone}` : ''}`,
+    `${data.firm_gst || '-'}`,
     margin,
-    33.5,
+    33,
     { boldValue: true, fontSize: 9 }
   );
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.text('Address: 36-1-62/1, Surya Nagar,', margin, 39);
-  doc.text('Kommula vari st, Pydiparru,', margin, 44);
-  doc.text('Tanuku - 534211, W.G, A.P', margin, 49);
+  doc.text('Address: 36-1-62/1, Surya Nagar,', margin, 38);
+  doc.text('Kommula vari st, Pydiparru,', margin, 42.5);
+  doc.text('Tanuku - 534211, W.G, A.P', margin, 47);
 
-  // Header Right: Sale Date & Generated on
+  drawLabelAndValue(doc, 'Mobile number:', '9866802833', margin, 52, {
+    boldValue: true,
+    fontSize: 9,
+  });
+
+  // Header Right: Date (dd-mm-yyyy) & Invoice no
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text(`Sale Date: ${data.date || '-'}`, pageWidth - margin, 27.5, {
+  doc.text(`Date: ${formatDateDDMMYYYY(data.date)}`, pageWidth - margin, 27.5, {
     align: 'right',
   });
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text(`Generated on: ${generatedTimestamp}`, pageWidth - margin, 33.5, {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(`Invoice no: ${data.invoice_number || '-'}`, pageWidth - margin, 33.5, {
     align: 'right',
   });
 
   // Header divider line
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.35);
-  doc.line(margin, 53.5, pageWidth - margin, 53.5);
+  doc.line(margin, 56, pageWidth - margin, 56);
 
-  // Sale Details & Dealer Details Box (increased text size & bold important values)
-  let currentY = 59.5;
-  const fullDealerAddress = [data.dealer_address, data.dealer_city]
-    .filter((v) => Boolean(v && v.trim()))
-    .join(', ');
-  const midX = pageWidth / 2 + 4;
-  const maxDealerAddrWidth = pageWidth - margin - midX - 4;
+  // Dealer Details Single Block
+  let currentY = 61.5;
+  const boxX = margin;
+  const boxWidth = pageWidth - margin * 2;
+  const textX = boxX + 4;
+  const maxDealerAddrWidth = boxWidth - 8;
+
   doc.setFontSize(10);
   const addressPrefix = 'Address: ';
   doc.setFont('helvetica', 'bold');
   const addressPrefixWidth = doc.getTextWidth(addressPrefix);
   doc.setFont('helvetica', 'normal');
   const wrappedDealerAddress = doc.splitTextToSize(
-    fullDealerAddress || '-',
-    Math.max(30, maxDealerAddrWidth - addressPrefixWidth - 1.5)
+    data.dealer_address?.trim() || '-',
+    Math.max(40, maxDealerAddrWidth - addressPrefixWidth - 1.5)
   ) as string[];
 
   const extraAddressLines = Math.max(0, wrappedDealerAddress.length - 1);
-  const infoBoxHeight = 32 + extraAddressLines * 5;
+  const infoBoxHeight = 37 + extraAddressLines * 5;
 
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
-  doc.rect(margin, currentY, pageWidth - margin * 2, infoBoxHeight, 'FD');
+  doc.rect(boxX, currentY, boxWidth, infoBoxHeight, 'FD');
 
-  // Vertical divider inside info box
-  doc.line(pageWidth / 2, currentY, pageWidth / 2, currentY + infoBoxHeight);
-
-  // Left Column: Sale Details
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('SALE DETAILS', margin + 4, currentY + 7.5);
+  doc.text('DEALER DETAILS', textX, currentY + 7.5);
 
-  drawLabelAndValue(doc, 'Sale No:', data.sale_number || '-', margin + 4, currentY + 15, {
+  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', textX, currentY + 14.5, {
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(
-    doc,
-    'Invoice No:',
-    data.invoice_number || '-',
-    margin + 4,
-    currentY + 21.5,
-    { boldValue: true, fontSize: 10 }
-  );
-  drawLabelAndValue(doc, 'Sale Date:', data.date || '-', margin + 4, currentY + 28, {
+  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', textX, currentY + 20.5, {
     boldValue: true,
     fontSize: 10,
   });
-
-  // Right Column: Dealer Details
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('DEALER DETAILS', midX, currentY + 7.5);
-
-  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', midX, currentY + 15, {
-    boldValue: true,
-    fontSize: 10,
-  });
-  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', midX, currentY + 21.5, {
+  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', textX, currentY + 26.5, {
     boldValue: true,
     fontSize: 10,
   });
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(addressPrefix, midX, currentY + 28);
+  doc.text(addressPrefix, textX, currentY + 32.5);
   doc.setFont('helvetica', 'normal');
   wrappedDealerAddress.forEach((line, idx) => {
-    doc.text(line, midX + addressPrefixWidth + 1.5, currentY + 28 + idx * 5);
+    doc.text(line, textX + addressPrefixWidth + 1.5, currentY + 32.5 + idx * 5);
   });
 
   currentY += infoBoxHeight + 8;
 
-  // Items Table (HSN Code before Product, no GST labels, black & white only)
+  // Items Table (Variant and Qty columns removed)
   const tableHead = [
     [
       '#',
       'HSN Code',
       'Product',
-      'Variant',
-      'Qty',
       'Base Qty',
       'Unit Price',
       'Disc %',
@@ -246,7 +237,6 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
 
   const tableBody = data.items.map((item, idx) => {
     const prodLabel = item.product_name;
-    const varLabel = item.variant_name;
     const baseQtyLabel = item.base_unit_name
       ? `${item.base_quantity} ${item.base_unit_name}`
       : `${item.base_quantity}`;
@@ -255,8 +245,6 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
       String(idx + 1),
       item.hsn_code?.trim() || '-',
       prodLabel,
-      varLabel,
-      String(item.quantity),
       baseQtyLabel,
       formatRs(item.gst_unit_price),
       `${Number(item.discount_rate || 0)}%`,
@@ -275,7 +263,7 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 7.4,
+      fontSize: 7.8,
       cellPadding: 2.4,
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
@@ -287,7 +275,7 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       fontStyle: 'bold',
-      fontSize: 7.4,
+      fontSize: 7.8,
       halign: 'center',
       lineColor: [0, 0, 0],
       lineWidth: 0.25,
@@ -296,18 +284,16 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
       fillColor: [255, 255, 255],
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 7 },
-      1: { halign: 'center', cellWidth: 16 },
-      2: { halign: 'left', cellWidth: 26 },
-      3: { halign: 'left', cellWidth: 21 },
-      4: { halign: 'right', cellWidth: 10 },
-      5: { halign: 'right', cellWidth: 15 },
-      6: { halign: 'right', cellWidth: 18 },
+      0: { halign: 'center', cellWidth: 8 },
+      1: { halign: 'center', cellWidth: 17 },
+      2: { halign: 'left', cellWidth: 43 },
+      3: { halign: 'right', cellWidth: 19 },
+      4: { halign: 'right', cellWidth: 21 },
+      5: { halign: 'right', cellWidth: 12 },
+      6: { halign: 'right', cellWidth: 17 },
       7: { halign: 'right', cellWidth: 11 },
-      8: { halign: 'right', cellWidth: 15 },
-      9: { halign: 'right', cellWidth: 10 },
-      10: { halign: 'right', cellWidth: 15 },
-      11: { halign: 'right', cellWidth: 20, fontStyle: 'bold' },
+      8: { halign: 'right', cellWidth: 16 },
+      9: { halign: 'right', cellWidth: 20, fontStyle: 'bold' },
     },
   });
 
@@ -449,9 +435,9 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  doc.text('Old GST Balance', col1X, financialsY + 11.5);
-  doc.text('This Bill GST Total', col2X, financialsY + 11.5);
-  doc.text('Current GST Balance', col3X, financialsY + 11.5);
+  doc.text('Old Balance', col1X, financialsY + 11.5);
+  doc.text('Bill Amount', col2X, financialsY + 11.5);
+  doc.text('Final Balance', col3X, financialsY + 11.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
