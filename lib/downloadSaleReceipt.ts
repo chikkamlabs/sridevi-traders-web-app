@@ -33,8 +33,16 @@ export interface SaleReceiptData {
   dealer_address?: string | null;
   dealer_gst?: string | null;
   dealer_city?: string | null;
+  vehicle_number?: string | null;
+  transporter_name?: string | null;
   gst_subtotal: number;
   tax_amount: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
   extra_charges?: number;
   gst_total: number;
   old_gst_balance?: number;
@@ -90,10 +98,51 @@ function drawLabelAndValue(
   doc.text(value, x + labelWidth + 1.5, y);
 }
 
+async function loadLogoForPdf(
+  src: string
+): Promise<{ dataUrl: string; aspectRatio: number } | null> {
+  if (typeof window === 'undefined' || typeof Image === 'undefined') return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (!w || !h) {
+          resolve(null);
+          return;
+        }
+        const maxDim = 400;
+        const scale = Math.min(1, maxDim / Math.max(w, h));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve({
+          dataUrl: canvas.toDataURL('image/png'),
+          aspectRatio: w / h,
+        });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 /**
  * Generates a Tax Invoice PDF using jspdf and jspdf-autotable.
  */
-export function downloadSaleReceipt(data: SaleReceiptData): void {
+export async function downloadSaleReceipt(data: SaleReceiptData): Promise<void> {
+  const logo = await loadLogoForPdf('/st&co_logo.png');
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -113,127 +162,165 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
   doc.setTextColor(0, 0, 0);
   doc.setDrawColor(0, 0, 0);
 
-  // Top Middle: "Tax Invoice"
+  // Top Left: Logo (public/st&co_logo.png)
+  if (logo) {
+    const maxW = 30;
+    const maxH = 29;
+    let drawW = maxW;
+    let drawH = drawW / logo.aspectRatio;
+    if (drawH > maxH) {
+      drawH = maxH;
+      drawW = drawH * logo.aspectRatio;
+    }
+    const logoY = 11 + (maxH - drawH) / 2;
+    doc.addImage(logo.dataUrl, 'PNG', margin, logoY, drawW, drawH);
+  }
+
+  // Top Center: Small "Tax Invoice", then SRIDEVI TRADERS & CO, Address lines, Mobile & GST
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text('Tax Invoice', pageWidth / 2, 16.5, { align: 'center' });
+  doc.setFontSize(10);
+  doc.text('Tax Invoice', pageWidth / 2, 14.5, { align: 'center' });
 
-  // Subtle divider under top title
-  doc.setLineWidth(0.25);
-  doc.line(margin, 20, pageWidth - margin, 20);
-
-  // Header Left: Firm Name, GST Number, 3-line Address, and Mobile number below address
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(data.firm_name || 'Sridevi Traders', margin, 27.5);
-
-  doc.setFontSize(9);
-  drawLabelAndValue(
-    doc,
-    'GST Number:',
-    `${data.firm_gst || '-'}`,
-    margin,
-    33,
-    { boldValue: true, fontSize: 9 }
-  );
+  doc.setFontSize(17);
+  doc.text('SRIDEVI TRADERS & CO', pageWidth / 2, 22, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Address: 36-1-62/1, Surya Nagar,', margin, 38);
-  doc.text('Kommula vari st, Pydiparru,', margin, 42.5);
-  doc.text('Tanuku - 534211, W.G, A.P', margin, 47);
-
-  drawLabelAndValue(doc, 'Mobile number:', '9866802833', margin, 52, {
-    boldValue: true,
-    fontSize: 9,
+  doc.setFontSize(10.5);
+  doc.text('Ground Floor, Flat no. 36-3-142/7, SriRam Nagar', pageWidth / 2, 28, {
+    align: 'center',
   });
-
-  // Header Right: Date (dd-mm-yyyy) & Invoice no
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text(`Date: ${formatDateDDMMYYYY(data.date)}`, pageWidth - margin, 27.5, {
-    align: 'right',
+  doc.text('Mandapaka Road, Pydiparru, Tanuku, W.G DT, AP - 534211', pageWidth / 2, 33, {
+    align: 'center',
   });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text(`Invoice no: ${data.invoice_number || '-'}`, pageWidth - margin, 33.5, {
-    align: 'right',
-  });
+  doc.text(
+    'Mobile number: 9866802833 | GST Number: 37PLQPS2138F1ZD',
+    pageWidth / 2,
+    38.5,
+    { align: 'center' }
+  );
 
   // Header divider line
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.35);
-  doc.line(margin, 56, pageWidth - margin, 56);
+  doc.line(margin, 43.5, pageWidth - margin, 43.5);
 
-  // Dealer Details Single Block
-  let currentY = 61.5;
+  // Sale Details (Left) & Dealer Details (Right) Box
+  let currentY = 49;
   const boxX = margin;
   const boxWidth = pageWidth - margin * 2;
-  const textX = boxX + 4;
-  const maxDealerAddrWidth = boxWidth - 8;
+  const halfWidth = boxWidth / 2;
+  const leftX = boxX + 4;
+  const midX = pageWidth / 2 + 4;
 
+  // Left column wrapping for Transporter name
   doc.setFontSize(10);
+  const transporterPrefix = 'Transporter name: ';
+  doc.setFont('helvetica', 'bold');
+  const transporterPrefixWidth = doc.getTextWidth(transporterPrefix);
+  doc.setFont('helvetica', 'normal');
+  const wrappedTransporter = doc.splitTextToSize(
+    data.transporter_name?.trim() || '-',
+    Math.max(20, halfWidth - 8 - transporterPrefixWidth - 1)
+  ) as string[];
+
+  // Right column wrapping for Address
   const addressPrefix = 'Address: ';
   doc.setFont('helvetica', 'bold');
   const addressPrefixWidth = doc.getTextWidth(addressPrefix);
   doc.setFont('helvetica', 'normal');
   const wrappedDealerAddress = doc.splitTextToSize(
     data.dealer_address?.trim() || '-',
-    Math.max(40, maxDealerAddrWidth - addressPrefixWidth - 1.5)
+    Math.max(25, halfWidth - 8 - addressPrefixWidth - 1)
   ) as string[];
 
-  const extraAddressLines = Math.max(0, wrappedDealerAddress.length - 1);
-  const infoBoxHeight = 37 + extraAddressLines * 5;
+  const extraLines = Math.max(
+    0,
+    wrappedTransporter.length - 1,
+    wrappedDealerAddress.length - 1
+  );
+  const infoBoxHeight = 37 + extraLines * 5;
 
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
   doc.rect(boxX, currentY, boxWidth, infoBoxHeight, 'FD');
 
+  // Vertical divider inside info box
+  doc.line(pageWidth / 2, currentY, pageWidth / 2, currentY + infoBoxHeight);
+
+  // Left Column: Sale Details
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('DEALER DETAILS', textX, currentY + 7.5);
+  doc.text('SALE DETAILS', leftX, currentY + 7.5);
 
-  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', textX, currentY + 14.5, {
+  drawLabelAndValue(
+    doc,
+    'Date:',
+    formatDateDDMMYYYY(data.date),
+    leftX,
+    currentY + 14.5,
+    { boldValue: true, fontSize: 10 }
+  );
+  drawLabelAndValue(
+    doc,
+    'Invoice no:',
+    data.invoice_number || '-',
+    leftX,
+    currentY + 20.5,
+    { boldValue: true, fontSize: 10 }
+  );
+  drawLabelAndValue(
+    doc,
+    'Vehicle No.:',
+    data.vehicle_number?.trim() || '-',
+    leftX,
+    currentY + 26.5,
+    { boldValue: true, fontSize: 10 }
+  );
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(transporterPrefix, leftX, currentY + 32.5);
+  doc.setFont('helvetica', 'normal');
+  wrappedTransporter.forEach((line, idx) => {
+    doc.text(line, leftX + transporterPrefixWidth + 1, currentY + 32.5 + idx * 5);
+  });
+
+  // Right Column: Dealer Details
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('DEALER DETAILS', midX, currentY + 7.5);
+
+  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', midX, currentY + 14.5, {
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', textX, currentY + 20.5, {
+  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', midX, currentY + 20.5, {
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', textX, currentY + 26.5, {
+  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', midX, currentY + 26.5, {
     boldValue: true,
     fontSize: 10,
   });
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(addressPrefix, textX, currentY + 32.5);
+  doc.text(addressPrefix, midX, currentY + 32.5);
   doc.setFont('helvetica', 'normal');
   wrappedDealerAddress.forEach((line, idx) => {
-    doc.text(line, textX + addressPrefixWidth + 1.5, currentY + 32.5 + idx * 5);
+    doc.text(line, midX + addressPrefixWidth + 1, currentY + 32.5 + idx * 5);
   });
 
   currentY += infoBoxHeight + 8;
 
-  // Items Table (Variant and Qty columns removed)
-  const tableHead = [
-    [
-      '#',
-      'HSN Code',
-      'Product',
-      'Base Qty',
-      'Unit Price',
-      'Disc %',
-      'Disc Amt',
-      'Tax %',
-      'Tax Amt',
-      'Total',
-    ],
-  ];
+  // Items Table (#, HSN Code, Product, Base Qty, Total)
+  const tableHead = [['#', 'HSN Code', 'Product', 'Base Qty', 'Total']];
 
   const tableBody = data.items.map((item, idx) => {
     const prodLabel = item.product_name;
@@ -246,11 +333,6 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
       item.hsn_code?.trim() || '-',
       prodLabel,
       baseQtyLabel,
-      formatRs(item.gst_unit_price),
-      `${Number(item.discount_rate || 0)}%`,
-      formatRs(item.discount_amount),
-      `${Number(item.tax_rate || 0)}%`,
-      formatRs(item.tax_amount),
       formatRs(item.gst_total_price),
     ];
   });
@@ -263,8 +345,8 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     theme: 'grid',
     styles: {
       font: 'helvetica',
-      fontSize: 7.8,
-      cellPadding: 2.4,
+      fontSize: 8.5,
+      cellPadding: 2.6,
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       lineColor: [0, 0, 0],
@@ -275,7 +357,7 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
       fillColor: [255, 255, 255],
       textColor: [0, 0, 0],
       fontStyle: 'bold',
-      fontSize: 7.8,
+      fontSize: 8.5,
       halign: 'center',
       lineColor: [0, 0, 0],
       lineWidth: 0.25,
@@ -284,16 +366,11 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
       fillColor: [255, 255, 255],
     },
     columnStyles: {
-      0: { halign: 'center', cellWidth: 8 },
-      1: { halign: 'center', cellWidth: 17 },
-      2: { halign: 'left', cellWidth: 43 },
-      3: { halign: 'right', cellWidth: 19 },
-      4: { halign: 'right', cellWidth: 21 },
-      5: { halign: 'right', cellWidth: 12 },
-      6: { halign: 'right', cellWidth: 17 },
-      7: { halign: 'right', cellWidth: 11 },
-      8: { halign: 'right', cellWidth: 16 },
-      9: { halign: 'right', cellWidth: 20, fontStyle: 'bold' },
+      0: { halign: 'center', cellWidth: 10 },
+      1: { halign: 'center', cellWidth: 26 },
+      2: { halign: 'left', cellWidth: 84 },
+      3: { halign: 'right', cellWidth: 32 },
+      4: { halign: 'right', cellWidth: 32, fontStyle: 'bold' },
     },
   });
 
@@ -305,7 +382,7 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     ? (doc.splitTextToSize(data.notes!.trim(), pageWidth - margin * 2) as string[])
     : [];
   const notesBlockHeight = hasNotes ? 9 + wrappedNotes.length * 4.5 : 0;
-  const summaryBoxHeight = 39;
+  const summaryBoxHeight = 47;
   const financialsGap = 5;
   const financialsBoxHeight = 20;
   const bottomBlockHeight = 36;
@@ -326,11 +403,11 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     summaryY = 16;
   }
 
-  // Right Box: Subtotal, Tax Amount, Extra Amount, Total Amount
-  const totalsBoxWidth = 78;
+  // Right Box: Subtotal, SGST, CGST, IGST, Extra Charges, Total Amount
+  const totalsBoxWidth = 82;
   const totalsBoxX = pageWidth - margin - totalsBoxWidth;
 
-  // Left Box: Bank Details (left of Subtotal / Tax / Extra / Total)
+  // Left Box: Bank Details (left of Totals box)
   const bankBoxWidth = pageWidth - margin * 2 - totalsBoxWidth - 6;
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
@@ -340,14 +417,14 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.text('Bank Details', margin + 4, summaryY + 7);
+  doc.text('Bank Details', margin + 4, summaryY + 8);
 
   drawLabelAndValue(
     doc,
     'Account Name:',
     'SRIDEVI Traders & CO',
     margin + 4,
-    summaryY + 14.5,
+    summaryY + 16.5,
     { boldValue: true, fontSize: 9 }
   );
   drawLabelAndValue(
@@ -355,10 +432,10 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     'Account Number:',
     '120031141040',
     margin + 4,
-    summaryY + 21,
+    summaryY + 24,
     { boldValue: true, fontSize: 9 }
   );
-  drawLabelAndValue(doc, 'IFSC:', 'CNRB0002776', margin + 4, summaryY + 27.5, {
+  drawLabelAndValue(doc, 'IFSC:', 'CNRB0002776', margin + 4, summaryY + 31.5, {
     boldValue: true,
     fontSize: 9,
   });
@@ -367,7 +444,7 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     'Bank Name:',
     'CANARA BANK, TANUKU BRANCH',
     margin + 4,
-    summaryY + 34,
+    summaryY + 39,
     { boldValue: false, fontSize: 9 }
   );
 
@@ -381,33 +458,49 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
   doc.setFontSize(9.5);
   doc.setTextColor(0, 0, 0);
 
-  doc.text('Subtotal:', totalsBoxX + 4, summaryY + 7.5);
-  doc.text(formatRs(data.gst_subtotal), totalsBoxX + totalsBoxWidth - 4, summaryY + 7.5, {
+  doc.text('Subtotal:', totalsBoxX + 4, summaryY + 7);
+  doc.text(formatRs(data.gst_subtotal), totalsBoxX + totalsBoxWidth - 4, summaryY + 7, {
     align: 'right',
   });
 
-  doc.text('Tax Amount:', totalsBoxX + 4, summaryY + 14.5);
-  doc.text(formatRs(data.tax_amount), totalsBoxX + totalsBoxWidth - 4, summaryY + 14.5, {
+  const sgstRate = Number(data.sgst_rate || 0);
+  const sgstAmount = Number(data.sgst_amount || 0);
+  doc.text(`SGST (${sgstRate}%):`, totalsBoxX + 4, summaryY + 13);
+  doc.text(formatRs(sgstAmount), totalsBoxX + totalsBoxWidth - 4, summaryY + 13, {
     align: 'right',
   });
 
-  doc.text('Extra Amount:', totalsBoxX + 4, summaryY + 21.5);
+  const cgstRate = Number(data.cgst_rate || 0);
+  const cgstAmount = Number(data.cgst_amount || 0);
+  doc.text(`CGST (${cgstRate}%):`, totalsBoxX + 4, summaryY + 19);
+  doc.text(formatRs(cgstAmount), totalsBoxX + totalsBoxWidth - 4, summaryY + 19, {
+    align: 'right',
+  });
+
+  const igstRate = Number(data.igst_rate || 0);
+  const igstAmount = Number(data.igst_amount || 0);
+  doc.text(`IGST (${igstRate}%):`, totalsBoxX + 4, summaryY + 25);
+  doc.text(formatRs(igstAmount), totalsBoxX + totalsBoxWidth - 4, summaryY + 25, {
+    align: 'right',
+  });
+
+  doc.text('Extra Charges:', totalsBoxX + 4, summaryY + 31);
   doc.text(
     formatRs(data.extra_charges || 0),
     totalsBoxX + totalsBoxWidth - 4,
-    summaryY + 21.5,
+    summaryY + 31,
     { align: 'right' }
   );
 
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
-  doc.line(totalsBoxX + 4, summaryY + 25.5, totalsBoxX + totalsBoxWidth - 4, summaryY + 25.5);
+  doc.line(totalsBoxX + 4, summaryY + 35, totalsBoxX + totalsBoxWidth - 4, summaryY + 35);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
   doc.setTextColor(0, 0, 0);
-  doc.text('Total Amount:', totalsBoxX + 4, summaryY + 33.5);
-  doc.text(formatRs(data.gst_total), totalsBoxX + totalsBoxWidth - 4, summaryY + 33.5, {
+  doc.text('Total Amount:', totalsBoxX + 4, summaryY + 42);
+  doc.text(formatRs(data.gst_total), totalsBoxX + totalsBoxWidth - 4, summaryY + 42, {
     align: 'right',
   });
 
@@ -463,8 +556,7 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     afterSummaryY = notesY + 5 + wrappedNotes.length * 4.5;
   }
 
-  // Bottom Section: Transportation Details (Bottom Left) & Authorised Signatory (Bottom Right)
-  // Positioned cleanly above the raised bottom page border line
+  // Bottom Right Box: Empty Signature box with For, SRIDEVI TRADERS & CO and Signature
   let bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
   if (afterSummaryY + 8 > bottomBlockY) {
     doc.addPage();
@@ -473,28 +565,6 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
     bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
   }
 
-  // Bottom Left Box: Transportation Details (Name, Vehicle Number)
-  const transportBoxWidth = 96;
-  doc.setDrawColor(0, 0, 0);
-  doc.setFillColor(255, 255, 255);
-  doc.setLineWidth(0.3);
-  doc.rect(margin, bottomBlockY, transportBoxWidth, bottomBlockHeight, 'FD');
-
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Transportation Details', margin + 4, bottomBlockY + 7.5);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('Name:', margin + 4, bottomBlockY + 17);
-  doc.setLineWidth(0.2);
-  doc.line(margin + 17, bottomBlockY + 17.5, margin + transportBoxWidth - 4, bottomBlockY + 17.5);
-
-  doc.text('Vehicle Number:', margin + 4, bottomBlockY + 27.5);
-  doc.line(margin + 33, bottomBlockY + 28, margin + transportBoxWidth - 4, bottomBlockY + 28);
-
-  // Bottom Right Box: Authorised Signatory (Name, Date, Sign)
   const signBoxWidth = 78;
   const signBoxX = pageWidth - margin - signBoxWidth;
   doc.setDrawColor(0, 0, 0);
@@ -504,20 +574,16 @@ export function downloadSaleReceipt(data: SaleReceiptData): void {
 
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('Authorised Signatory', signBoxX + 4, bottomBlockY + 7.5);
+  doc.setFontSize(9.5);
+  doc.text('For, SRIDEVI TRADERS & CO', signBoxX + signBoxWidth / 2, bottomBlockY + 7.5, {
+    align: 'center',
+  });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text('Name:', signBoxX + 4, bottomBlockY + 15.5);
-  doc.setLineWidth(0.2);
-  doc.line(signBoxX + 17, bottomBlockY + 16, signBoxX + signBoxWidth - 4, bottomBlockY + 16);
-
-  doc.text('Date:', signBoxX + 4, bottomBlockY + 23);
-  doc.line(signBoxX + 15, bottomBlockY + 23.5, signBoxX + signBoxWidth - 4, bottomBlockY + 23.5);
-
-  doc.text('Sign:', signBoxX + 4, bottomBlockY + 30.5);
-  doc.line(signBoxX + 15, bottomBlockY + 31, signBoxX + signBoxWidth - 4, bottomBlockY + 31);
+  doc.text('Signature', signBoxX + signBoxWidth / 2, bottomBlockY + bottomBlockHeight - 5, {
+    align: 'center',
+  });
 
   // Draw outer page border on every page (with raised bottom line)
   const totalPages = doc.getNumberOfPages();

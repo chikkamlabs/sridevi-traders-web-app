@@ -27,6 +27,8 @@ export interface NSaleReceiptData {
   dealer_phone?: string | null;
   dealer_address?: string | null;
   dealer_city?: string | null;
+  vehicle_number?: string | null;
+  transporter_name?: string | null;
   n_gst_subtotal: number;
   n_gst_total: number;
   old_n_gst_balance?: number;
@@ -82,10 +84,51 @@ function drawLabelAndValue(
   doc.text(value, x + labelWidth + 1.5, y);
 }
 
+async function loadLogoForPdf(
+  src: string
+): Promise<{ dataUrl: string; aspectRatio: number } | null> {
+  if (typeof window === 'undefined' || typeof Image === 'undefined') return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (!w || !h) {
+          resolve(null);
+          return;
+        }
+        const maxDim = 400;
+        const scale = Math.min(1, maxDim / Math.max(w, h));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve({
+          dataUrl: canvas.toDataURL('image/png'),
+          aspectRatio: w / h,
+        });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 /**
  * Generates an Invoice PDF using jspdf and jspdf-autotable.
  */
-export function downloadNsaleReceipt(data: NSaleReceiptData): void {
+export async function downloadNsaleReceipt(data: NSaleReceiptData): Promise<void> {
+  const logo = await loadLogoForPdf('/st&co_logo.png');
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -105,98 +148,154 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
   doc.setTextColor(0, 0, 0);
   doc.setDrawColor(0, 0, 0);
 
-  // Top Middle: "Invoice"
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text('Invoice', pageWidth / 2, 16.5, { align: 'center' });
+  // Top Left: Logo (public/st&co_logo.png)
+  if (logo) {
+    const maxW = 30;
+    const maxH = 29;
+    let drawW = maxW;
+    let drawH = drawW / logo.aspectRatio;
+    if (drawH > maxH) {
+      drawH = maxH;
+      drawW = drawH * logo.aspectRatio;
+    }
+    const logoY = 11 + (maxH - drawH) / 2;
+    doc.addImage(logo.dataUrl, 'PNG', margin, logoY, drawW, drawH);
+  }
 
-  // Subtle divider under top title
-  doc.setLineWidth(0.25);
-  doc.line(margin, 20, pageWidth - margin, 20);
-
-  // Header Left: Firm Name, 3-line Address, and Mobile number below address
+  // Top Center: Small "Invoice", then larger SRIDEVI TRADERS & CO, Address lines, Mobile number
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(data.firm_name || 'Sridevi Traders', margin, 27.5);
+  doc.setFontSize(10);
+  doc.text('Invoice', pageWidth / 2, 14.5, { align: 'center' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(17);
+  doc.text('SRIDEVI TRADERS & CO', pageWidth / 2, 22, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Address: 36-1-62/1, Surya Nagar,', margin, 33.5);
-  doc.text('Kommula vari st, Pydiparru,', margin, 38.5);
-  doc.text('Tanuku - 534211, W.G, A.P', margin, 43.5);
-
-  drawLabelAndValue(doc, 'Mobile number:', '9866802833', margin, 49, {
-    boldValue: true,
-    fontSize: 9,
+  doc.setFontSize(10.5);
+  doc.text('Ground Floor, Flat no. 36-3-142/7, SriRam Nagar', pageWidth / 2, 28, {
+    align: 'center',
   });
-
-  // Header Right: Date (dd-mm-yyyy) & Invoice no
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text(`Date: ${formatDateDDMMYYYY(data.date)}`, pageWidth - margin, 27.5, {
-    align: 'right',
+  doc.text('Mandapaka Road, Pydiparru, Tanuku, W.G DT, AP - 534211', pageWidth / 2, 33, {
+    align: 'center',
   });
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text(`Invoice no: ${data.invoice_number || '-'}`, pageWidth - margin, 33.5, {
-    align: 'right',
-  });
+  doc.setFontSize(10.5);
+  doc.text('Mobile number: 9866802833', pageWidth / 2, 38.5, { align: 'center' });
 
   // Header divider line
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.35);
-  doc.line(margin, 53.5, pageWidth - margin, 53.5);
+  doc.line(margin, 43.5, pageWidth - margin, 43.5);
 
-  // Dealer Details Single Block
-  let currentY = 59.5;
+  // Sale Details (Left) & Dealer Details (Right) Box
+  let currentY = 49;
   const boxX = margin;
   const boxWidth = pageWidth - margin * 2;
-  const textX = boxX + 4;
-  const maxDealerAddrWidth = boxWidth - 8;
+  const halfWidth = boxWidth / 2;
+  const leftX = boxX + 4;
+  const midX = pageWidth / 2 + 4;
 
+  // Left column wrapping for Transporter name
   doc.setFontSize(10);
+  const transporterPrefix = 'Transporter name: ';
+  doc.setFont('helvetica', 'bold');
+  const transporterPrefixWidth = doc.getTextWidth(transporterPrefix);
+  doc.setFont('helvetica', 'normal');
+  const wrappedTransporter = doc.splitTextToSize(
+    data.transporter_name?.trim() || '-',
+    Math.max(20, halfWidth - 8 - transporterPrefixWidth - 1)
+  ) as string[];
+
+  // Right column wrapping for Address
   const addressPrefix = 'Address: ';
   doc.setFont('helvetica', 'bold');
   const addressPrefixWidth = doc.getTextWidth(addressPrefix);
   doc.setFont('helvetica', 'normal');
   const wrappedDealerAddress = doc.splitTextToSize(
     data.dealer_address?.trim() || '-',
-    Math.max(40, maxDealerAddrWidth - addressPrefixWidth - 1.5)
+    Math.max(25, halfWidth - 8 - addressPrefixWidth - 1)
   ) as string[];
 
-  const extraAddressLines = Math.max(0, wrappedDealerAddress.length - 1);
-  const infoBoxHeight = 37 + extraAddressLines * 5;
+  const extraLines = Math.max(
+    0,
+    wrappedTransporter.length - 1,
+    wrappedDealerAddress.length - 1
+  );
+  const infoBoxHeight = 37 + extraLines * 5;
 
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
   doc.rect(boxX, currentY, boxWidth, infoBoxHeight, 'FD');
 
+  // Vertical divider inside info box
+  doc.line(pageWidth / 2, currentY, pageWidth / 2, currentY + infoBoxHeight);
+
+  // Left Column: Sale Details
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('DEALER DETAILS', textX, currentY + 7.5);
+  doc.text('SALE DETAILS', leftX, currentY + 7.5);
 
-  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', textX, currentY + 14.5, {
+  drawLabelAndValue(
+    doc,
+    'Date:',
+    formatDateDDMMYYYY(data.date),
+    leftX,
+    currentY + 14.5,
+    { boldValue: true, fontSize: 10 }
+  );
+  drawLabelAndValue(
+    doc,
+    'Invoice no:',
+    data.invoice_number || '-',
+    leftX,
+    currentY + 20.5,
+    { boldValue: true, fontSize: 10 }
+  );
+  drawLabelAndValue(
+    doc,
+    'Vehicle No.:',
+    data.vehicle_number?.trim() || '-',
+    leftX,
+    currentY + 26.5,
+    { boldValue: true, fontSize: 10 }
+  );
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(transporterPrefix, leftX, currentY + 32.5);
+  doc.setFont('helvetica', 'normal');
+  wrappedTransporter.forEach((line, idx) => {
+    doc.text(line, leftX + transporterPrefixWidth + 1, currentY + 32.5 + idx * 5);
+  });
+
+  // Right Column: Dealer Details
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('DEALER DETAILS', midX, currentY + 7.5);
+
+  drawLabelAndValue(doc, 'Dealer:', data.dealer_name || '-', midX, currentY + 14.5, {
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', textX, currentY + 20.5, {
+  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', midX, currentY + 20.5, {
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', textX, currentY + 26.5, {
+  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', midX, currentY + 26.5, {
     boldValue: true,
     fontSize: 10,
   });
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(addressPrefix, textX, currentY + 32.5);
+  doc.text(addressPrefix, midX, currentY + 32.5);
   doc.setFont('helvetica', 'normal');
   wrappedDealerAddress.forEach((line, idx) => {
-    doc.text(line, textX + addressPrefixWidth + 1.5, currentY + 32.5 + idx * 5);
+    doc.text(line, midX + addressPrefixWidth + 1, currentY + 32.5 + idx * 5);
   });
 
   currentY += infoBoxHeight + 8;
@@ -404,6 +503,19 @@ export function downloadNsaleReceipt(data: NSaleReceiptData): void {
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
   doc.rect(signBoxX, bottomBlockY, signBoxWidth, bottomBlockHeight, 'FD');
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('For, SRIDEVI TRADERS & CO', signBoxX + signBoxWidth / 2, bottomBlockY + 7.5, {
+    align: 'center',
+  });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('Signature', signBoxX + signBoxWidth / 2, bottomBlockY + bottomBlockHeight - 5, {
+    align: 'center',
+  });
 
   // Draw outer page border on every page (with raised bottom line)
   const totalPages = doc.getNumberOfPages();

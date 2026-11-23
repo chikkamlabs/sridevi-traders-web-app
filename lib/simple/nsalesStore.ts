@@ -45,6 +45,10 @@ export interface SimpleSaleBill {
   gst_total: number;
   n_gst_total: number;
   grand_total: number;
+  n_gst_old_balance?: number;
+  n_gst_new_balance?: number;
+  vehicle_number?: string | null;
+  transporter_name?: string | null;
   notes: string | null;
   created_by?: string | null;
   firm_name?: string;
@@ -228,6 +232,10 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
           gst_total,
           n_gst_total,
           grand_total,
+          n_gst_old_balance,
+          n_gst_new_balance,
+          vehicle_number,
+          transporter_name,
           notes,
           created_by,
           created_at,
@@ -308,6 +316,10 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
           gst_total: Number(s.gst_total || 0),
           n_gst_total: Number(s.n_gst_total || 0),
           grand_total: Number(s.grand_total || 0),
+          n_gst_old_balance: Number(s.n_gst_old_balance || 0),
+          n_gst_new_balance: Number(s.n_gst_new_balance || 0),
+          vehicle_number: s.vehicle_number || null,
+          transporter_name: s.transporter_name || null,
           notes: s.notes || null,
           created_by: s.created_by || null,
           firm_name: s.firms?.name || 'Firm',
@@ -373,13 +385,26 @@ export async function updateSimpleSaleBillNGst(params: {
   saleId: string;
   n_gst_subtotal: number;
   n_gst_total: number;
+  n_gst_old_balance?: number;
+  n_gst_new_balance?: number;
+  vehicle_number?: string | null;
+  transporter_name?: string | null;
   items: Array<{
     id: string;
     n_gst_unit_price: number;
     n_gst_total_price: number;
   }>;
 }): Promise<{ success: boolean; error: string | null }> {
-  const { saleId, n_gst_subtotal, n_gst_total, items } = params;
+  const {
+    saleId,
+    n_gst_subtotal,
+    n_gst_total,
+    n_gst_old_balance,
+    n_gst_new_balance,
+    vehicle_number,
+    transporter_name,
+    items,
+  } = params;
 
   if (!saleId) {
     return { success: false, error: 'Sale ID is required.' };
@@ -399,13 +424,27 @@ export async function updateSimpleSaleBillNGst(params: {
 
   if (isSupabaseConfigured) {
     try {
+      const updatePayload: Record<string, unknown> = {
+        n_gst_subtotal: Number(n_gst_subtotal),
+        n_gst_total: Number(n_gst_total),
+        updated_at: nowIso,
+      };
+      if (n_gst_old_balance !== undefined) {
+        updatePayload.n_gst_old_balance = Number(n_gst_old_balance);
+      }
+      if (n_gst_new_balance !== undefined) {
+        updatePayload.n_gst_new_balance = Number(n_gst_new_balance);
+      }
+      if (vehicle_number !== undefined) {
+        updatePayload.vehicle_number = vehicle_number?.trim() || null;
+      }
+      if (transporter_name !== undefined) {
+        updatePayload.transporter_name = transporter_name?.trim() || null;
+      }
+
       const { error: saleErr } = await supabase
         .from('sales_bills')
-        .update({
-          n_gst_subtotal: Number(n_gst_subtotal),
-          n_gst_total: Number(n_gst_total),
-          updated_at: nowIso,
-        })
+        .update(updatePayload)
         .eq('id', saleId);
 
       if (saleErr) {
@@ -443,6 +482,18 @@ export async function updateSimpleSaleBillNGst(params: {
             ...s,
             n_gst_subtotal: Number(n_gst_subtotal),
             n_gst_total: Number(n_gst_total),
+            ...(n_gst_old_balance !== undefined
+              ? { n_gst_old_balance: Number(n_gst_old_balance) }
+              : {}),
+            ...(n_gst_new_balance !== undefined
+              ? { n_gst_new_balance: Number(n_gst_new_balance) }
+              : {}),
+            ...(vehicle_number !== undefined
+              ? { vehicle_number: vehicle_number?.trim() || null }
+              : {}),
+            ...(transporter_name !== undefined
+              ? { transporter_name: transporter_name?.trim() || null }
+              : {}),
             updated_at: nowIso,
           }
         : s

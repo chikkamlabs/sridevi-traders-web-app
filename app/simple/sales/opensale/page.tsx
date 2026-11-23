@@ -62,6 +62,8 @@ function SimpleOpenSaleContent() {
   // Editable N-GST sale fields
   const [nGstSubtotal, setNGstSubtotal] = useState('0.00');
   const [nGstTotal, setNGstTotal] = useState('0.00');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [transporterName, setTransporterName] = useState('');
   const [editableItems, setEditableItems] = useState<Record<string, EditableSaleItemState>>({});
 
   useEffect(() => {
@@ -86,6 +88,8 @@ function SimpleOpenSaleContent() {
         setSale(data);
         setNGstSubtotal(Number(data.n_gst_subtotal || 0).toFixed(2));
         setNGstTotal(Number(data.n_gst_total || 0).toFixed(2));
+        setVehicleNumber(data.vehicle_number || '');
+        setTransporterName(data.transporter_name || '');
 
         const itemsState: Record<string, EditableSaleItemState> = {};
         for (const item of data.items || []) {
@@ -188,11 +192,22 @@ function SimpleOpenSaleContent() {
 
     setIsSaving(true);
 
-    // 1. Update sales_bills (n_gst_subtotal, n_gst_total) and sales_bill_items (n_gst_unit_price, n_gst_total_price)
+    // Check existing firm dealer n_gst_balance before adding this bill
+    const existingBalances = await getSimpleDealerBalances(sale.dealer_id);
+    const existingFirmBal = existingBalances.find((b) => b.firm_id === sale.firm_id);
+    const nGstOldBalance = Number(existingFirmBal?.n_gst_balance || 0);
+    const nGstNewBalance = nGstOldBalance + parsedTotal;
+
+    // 1. Update sales_bills (n_gst_subtotal, n_gst_total, n_gst_old_balance, n_gst_new_balance)
+    //    and sales_bill_items (n_gst_unit_price, n_gst_total_price)
     const updateRes = await updateSimpleSaleBillNGst({
       saleId: sale.id,
       n_gst_subtotal: parsedSubtotal,
       n_gst_total: parsedTotal,
+      n_gst_old_balance: nGstOldBalance,
+      n_gst_new_balance: nGstNewBalance,
+      vehicle_number: vehicleNumber.trim() || null,
+      transporter_name: transporterName.trim() || null,
       items: itemsPayload,
     });
 
@@ -238,18 +253,23 @@ function SimpleOpenSaleContent() {
     setIsSaving(false);
   };
 
-  const handleDownloadReceipt = () => {
+  const handleDownloadReceipt = async () => {
     if (!sale) return;
 
     const billNGstTotal = Number(nGstTotal || 0);
-    const currentNGstBalance = hasSavedNGstTx
-      ? Number(dealerNGstBalance || 0)
-      : Number(dealerNGstBalance || 0) + billNGstTotal;
-    const oldNGstBalance = hasSavedNGstTx
-      ? currentNGstBalance - Number(sale.n_gst_total || billNGstTotal)
-      : Number(dealerNGstBalance || 0);
+    const useSavedBalances =
+      hasSavedNGstTx ||
+      Number(sale.n_gst_old_balance || 0) !== 0 ||
+      Number(sale.n_gst_new_balance || 0) !== 0;
 
-    downloadNsaleReceipt({
+    const oldNGstBalance = useSavedBalances
+      ? Number(sale.n_gst_old_balance ?? 0)
+      : Number(dealerNGstBalance || 0);
+    const currentNGstBalance = useSavedBalances
+      ? Number(sale.n_gst_new_balance ?? oldNGstBalance + billNGstTotal)
+      : Number(dealerNGstBalance || 0) + billNGstTotal;
+
+    await downloadNsaleReceipt({
       sale_number: sale.sale_number,
       invoice_number: sale.invoice_number,
       date: sale.date,
@@ -258,6 +278,8 @@ function SimpleOpenSaleContent() {
       dealer_phone: sale.dealer_phone || null,
       dealer_address: sale.dealer_address || null,
       dealer_city: sale.dealer_city || null,
+      vehicle_number: vehicleNumber.trim() || sale.vehicle_number || null,
+      transporter_name: transporterName.trim() || sale.transporter_name || null,
       n_gst_subtotal: Number(nGstSubtotal || 0),
       n_gst_total: billNGstTotal,
       old_n_gst_balance: oldNGstBalance,
@@ -504,6 +526,53 @@ function SimpleOpenSaleContent() {
                       <div className="text-sm font-bold text-[var(--color-brand-deep-green)] mt-0.5">
                         {formatCurrency(sale.grand_total)}
                       </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">N-GST Old Balance</div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.n_gst_old_balance || 0)}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">N-GST New Balance</div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.n_gst_new_balance || 0)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Number & Transporter Name (Editable) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-[var(--color-border-subtle)]">
+                    <div className="form-group mb-0">
+                      <label htmlFor="sale-vehicle-number" className="text-xs font-semibold text-[var(--color-text-secondary)] block mb-1">
+                        Vehicle Number
+                      </label>
+                      <input
+                        id="sale-vehicle-number"
+                        type="text"
+                        value={vehicleNumber}
+                        onChange={(e) => setVehicleNumber(e.target.value)}
+                        placeholder="Enter vehicle number..."
+                        className="input-field py-2 px-3 text-sm"
+                        disabled={isSaving}
+                      />
+                    </div>
+
+                    <div className="form-group mb-0">
+                      <label htmlFor="sale-transporter-name" className="text-xs font-semibold text-[var(--color-text-secondary)] block mb-1">
+                        Transporter Name
+                      </label>
+                      <input
+                        id="sale-transporter-name"
+                        type="text"
+                        value={transporterName}
+                        onChange={(e) => setTransporterName(e.target.value)}
+                        placeholder="Enter transporter name..."
+                        className="input-field py-2 px-3 text-sm"
+                        disabled={isSaving}
+                      />
                     </div>
                   </div>
 

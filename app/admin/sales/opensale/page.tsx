@@ -72,13 +72,10 @@ function OpenSaleContent() {
     fetchSaleDetails();
   }, [saleId]);
 
-  const handleDownloadReceipt = () => {
+  const handleDownloadReceipt = async () => {
     if (!sale) return;
 
-    const currentGstBalance = Number(dealerGstBalance || 0);
-    const oldGstBalance = currentGstBalance - Number(sale.gst_total || 0);
-
-    downloadSaleReceipt({
+    await downloadSaleReceipt({
       sale_number: sale.sale_number,
       invoice_number: sale.invoice_number,
       date: sale.date,
@@ -91,12 +88,20 @@ function OpenSaleContent() {
       dealer_address: sale.dealer_address || null,
       dealer_city: sale.dealer_city || null,
       dealer_gst: sale.dealer_gst || null,
+      vehicle_number: sale.vehicle_number || null,
+      transporter_name: sale.transporter_name || null,
       gst_subtotal: sale.gst_subtotal,
       tax_amount: sale.tax_amount,
+      sgst_rate: Number(sale.sgst_rate || 0),
+      sgst_amount: Number(sale.sgst_amount || 0),
+      cgst_rate: Number(sale.cgst_rate || 0),
+      cgst_amount: Number(sale.cgst_amount || 0),
+      igst_rate: Number(sale.igst_rate || 0),
+      igst_amount: Number(sale.igst_amount || 0),
       extra_charges: sale.extra_charges || 0,
       gst_total: sale.gst_total,
-      old_gst_balance: oldGstBalance,
-      current_gst_balance: currentGstBalance,
+      old_gst_balance: Number(sale.gst_old_balance ?? 0),
+      current_gst_balance: Number(sale.gst_new_balance ?? 0),
       notes: sale.notes,
       items: (sale.items || []).map((item) => ({
         product_name: item.product_name || item.product_id,
@@ -281,6 +286,54 @@ function OpenSaleContent() {
                       </div>
                     </div>
 
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">
+                        SGST ({Number(sale.sgst_rate || 0)}%)
+                      </div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.sgst_amount || 0)}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">
+                        CGST ({Number(sale.cgst_rate || 0)}%)
+                      </div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.cgst_amount || 0)}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">
+                        IGST ({Number(sale.igst_rate || 0)}%)
+                      </div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.igst_amount || 0)}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">Extra Charges</div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.extra_charges || 0)}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">GST Old Balance</div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.gst_old_balance || 0)}
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">
+                      <div className="text-[11px] text-[var(--color-text-muted)]">GST New Balance</div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)] mt-0.5">
+                        {formatCurrency(sale.gst_new_balance || 0)}
+                      </div>
+                    </div>
+
                     <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-border-subtle)]">
                       <div className="text-[11px] text-[var(--color-text-secondary)]">GST Total</div>
                       <div className="text-sm font-bold text-[var(--color-brand-deep-green)] mt-0.5">
@@ -292,6 +345,23 @@ function OpenSaleContent() {
                       <div className="text-[11px] text-[var(--color-brand-deep-green)]">Grand Total</div>
                       <div className="text-sm font-bold text-[var(--color-brand-deep-green)] mt-0.5">
                         {formatCurrency(sale.grand_total)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Number & Transporter Name */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-[var(--color-border-subtle)]">
+                    <div className="p-3.5 rounded-lg bg-[var(--color-background)] border border-[var(--color-border-subtle)]">
+                      <div className="text-xs text-[var(--color-text-muted)] mb-1">Vehicle Number</div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)]">
+                        {sale.vehicle_number || '—'}
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 rounded-lg bg-[var(--color-background)] border border-[var(--color-border-subtle)]">
+                      <div className="text-xs text-[var(--color-text-muted)] mb-1">Transporter Name</div>
+                      <div className="text-sm font-semibold text-[var(--color-text-primary)]">
+                        {sale.transporter_name || '—'}
                       </div>
                     </div>
                   </div>

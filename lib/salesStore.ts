@@ -63,6 +63,18 @@ export interface SaleBill {
   gst_total: number;
   n_gst_total: number;
   grand_total: number;
+  gst_old_balance?: number;
+  gst_new_balance?: number;
+  n_gst_old_balance?: number;
+  n_gst_new_balance?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  vehicle_number?: string | null;
+  transporter_name?: string | null;
   notes: string | null;
   created_by?: string | null;
   firm_name?: string;
@@ -93,6 +105,16 @@ export interface SaleBillInput {
   gst_total: number;
   n_gst_total?: number;
   grand_total?: number;
+  gst_old_balance?: number;
+  gst_new_balance?: number;
+  sgst_rate?: number;
+  sgst_amount?: number;
+  cgst_rate?: number;
+  cgst_amount?: number;
+  igst_rate?: number;
+  igst_amount?: number;
+  vehicle_number?: string | null;
+  transporter_name?: string | null;
   notes?: string;
 }
 
@@ -294,6 +316,18 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           gst_total,
           n_gst_total,
           grand_total,
+          gst_old_balance,
+          gst_new_balance,
+          n_gst_old_balance,
+          n_gst_new_balance,
+          sgst_rate,
+          sgst_amount,
+          cgst_rate,
+          cgst_amount,
+          igst_rate,
+          igst_amount,
+          vehicle_number,
+          transporter_name,
           notes,
           created_by,
           created_at,
@@ -375,6 +409,18 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           gst_total: Number(s.gst_total || 0),
           n_gst_total: Number(s.n_gst_total || 0),
           grand_total: Number(s.grand_total || 0),
+          gst_old_balance: Number(s.gst_old_balance || 0),
+          gst_new_balance: Number(s.gst_new_balance || 0),
+          n_gst_old_balance: Number(s.n_gst_old_balance || 0),
+          n_gst_new_balance: Number(s.n_gst_new_balance || 0),
+          sgst_rate: Number(s.sgst_rate || 0),
+          sgst_amount: Number(s.sgst_amount || 0),
+          cgst_rate: Number(s.cgst_rate || 0),
+          cgst_amount: Number(s.cgst_amount || 0),
+          igst_rate: Number(s.igst_rate || 0),
+          igst_amount: Number(s.igst_amount || 0),
+          vehicle_number: s.vehicle_number || null,
+          transporter_name: s.transporter_name || null,
           notes: s.notes || null,
           created_by: s.created_by || null,
           firm_name: s.firms?.name || 'Firm',
@@ -491,6 +537,16 @@ export async function addSaleBill(
     gst_total: gstTotal,
     n_gst_total: Number(saleInput.n_gst_total || 0),
     grand_total: grandTotal,
+    gst_old_balance: Number(saleInput.gst_old_balance || 0),
+    gst_new_balance: Number(saleInput.gst_new_balance || 0),
+    sgst_rate: Number(saleInput.sgst_rate || 0),
+    sgst_amount: Number(saleInput.sgst_amount || 0),
+    cgst_rate: Number(saleInput.cgst_rate || 0),
+    cgst_amount: Number(saleInput.cgst_amount || 0),
+    igst_rate: Number(saleInput.igst_rate || 0),
+    igst_amount: Number(saleInput.igst_amount || 0),
+    vehicle_number: saleInput.vehicle_number?.trim() || null,
+    transporter_name: saleInput.transporter_name?.trim() || null,
     notes: saleInput.notes?.trim() || null,
   };
 
@@ -554,6 +610,16 @@ export async function addSaleBill(
         gst_total: Number(createdSale.gst_total),
         n_gst_total: Number(createdSale.n_gst_total),
         grand_total: Number(createdSale.grand_total),
+        gst_old_balance: Number(createdSale.gst_old_balance || 0),
+        gst_new_balance: Number(createdSale.gst_new_balance || 0),
+        sgst_rate: Number(createdSale.sgst_rate || 0),
+        sgst_amount: Number(createdSale.sgst_amount || 0),
+        cgst_rate: Number(createdSale.cgst_rate || 0),
+        cgst_amount: Number(createdSale.cgst_amount || 0),
+        igst_rate: Number(createdSale.igst_rate || 0),
+        igst_amount: Number(createdSale.igst_amount || 0),
+        vehicle_number: createdSale.vehicle_number || null,
+        transporter_name: createdSale.transporter_name || null,
         notes: createdSale.notes,
         created_at: createdSale.created_at,
         updated_at: createdSale.updated_at,

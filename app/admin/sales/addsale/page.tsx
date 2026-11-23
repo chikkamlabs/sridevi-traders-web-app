@@ -19,7 +19,10 @@ import {
   RecentPurchaseRate,
   SaleBillItemInput,
 } from '@/lib/salesStore';
-import { recordSaleDealerTransaction } from '@/lib/dealertrasacationsStore';
+import {
+  getDealerGstBalances,
+  recordSaleDealerTransaction,
+} from '@/lib/dealertrasacationsStore';
 import { downloadSaleReceipt, SaleReceiptItem } from '@/lib/downloadSaleReceipt';
 import { getStoredAuthUser } from '@/lib/auth';
 import {
@@ -125,8 +128,16 @@ export default function AddSalePage() {
   const [date, setDate] = useState(getTodayDateString());
   const [gstSubtotal, setGstSubtotal] = useState('0.00');
   const [taxAmount, setTaxAmount] = useState('0.00');
+  const [sgstRate, setSgstRate] = useState('0');
+  const [sgstAmount, setSgstAmount] = useState('0.00');
+  const [cgstRate, setCgstRate] = useState('0');
+  const [cgstAmount, setCgstAmount] = useState('0.00');
+  const [igstRate, setIgstRate] = useState('0');
+  const [igstAmount, setIgstAmount] = useState('0.00');
   const [extraCharges, setExtraCharges] = useState('0.00');
   const [gstTotal, setGstTotal] = useState('0.00');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [transporterName, setTransporterName] = useState('');
   const [notes, setNotes] = useState('');
 
   // Searchable Firm Picker
@@ -188,35 +199,121 @@ export default function AddSalePage() {
     loadInitial();
   }, []);
 
+  const recalculateBillTotals = (
+    subVal: number,
+    sRateVal: number,
+    cRateVal: number,
+    iRateVal: number,
+    extraVal: number
+  ) => {
+    const sub = Math.max(0, Number(subVal.toFixed(2)));
+    const sAmt = Number(((sub * Math.max(0, sRateVal)) / 100).toFixed(2));
+    const cAmt = Number(((sub * Math.max(0, cRateVal)) / 100).toFixed(2));
+    const iAmt = Number(((sub * Math.max(0, iRateVal)) / 100).toFixed(2));
+    const ext = Math.max(0, Number(extraVal.toFixed(2)));
+    const rawTotal = Number((sub + sAmt + cAmt + iAmt + ext).toFixed(2));
+    const roundedTotal = Math.ceil(rawTotal);
+
+    setSgstAmount(sAmt.toFixed(2));
+    setCgstAmount(cAmt.toFixed(2));
+    setIgstAmount(iAmt.toFixed(2));
+    setGstTotal(roundedTotal.toFixed(2));
+  };
+
+  const recalculateTotalFromAmounts = (
+    subVal: number,
+    sAmtVal: number,
+    cAmtVal: number,
+    iAmtVal: number,
+    extraVal: number
+  ) => {
+    const sub = Math.max(0, Number(subVal.toFixed(2)));
+    const sAmt = Math.max(0, Number(sAmtVal.toFixed(2)));
+    const cAmt = Math.max(0, Number(cAmtVal.toFixed(2)));
+    const iAmt = Math.max(0, Number(iAmtVal.toFixed(2)));
+    const ext = Math.max(0, Number(extraVal.toFixed(2)));
+    const rawTotal = Number((sub + sAmt + cAmt + iAmt + ext).toFixed(2));
+    setGstTotal(Math.ceil(rawTotal).toFixed(2));
+  };
+
   const syncTotalsFromItems = (nextItems: SaleItemRow[]) => {
     let subTotalSum = 0;
     let taxSum = 0;
-    let totalSum = 0;
 
     for (const item of nextItems) {
       const qty = Math.max(0, Number(item.quantity) || 0);
       const unitPrice = Math.max(0, Number(item.gst_unit_price) || 0);
       const discAmt = Math.max(0, Number(item.discount_amount) || 0);
       const itemTax = Math.max(0, Number(item.tax_amount) || 0);
-      const itemTotal = Math.max(0, Number(item.gst_total_price) || 0);
 
       subTotalSum += Math.max(0, qty * unitPrice - discAmt);
       taxSum += itemTax;
-      totalSum += itemTotal;
     }
 
-    const extraNum = Math.max(0, Number(extraCharges) || 0);
     setGstSubtotal(subTotalSum.toFixed(2));
     setTaxAmount(taxSum.toFixed(2));
-    setGstTotal((totalSum + extraNum).toFixed(2));
+    recalculateBillTotals(
+      subTotalSum,
+      Number(sgstRate) || 0,
+      Number(cgstRate) || 0,
+      Number(igstRate) || 0,
+      Number(extraCharges) || 0
+    );
+  };
+
+  const handleGstSubtotalChange = (value: string) => {
+    setGstSubtotal(value);
+    recalculateBillTotals(
+      Math.max(0, Number(value) || 0),
+      Number(sgstRate) || 0,
+      Number(cgstRate) || 0,
+      Number(igstRate) || 0,
+      Number(extraCharges) || 0
+    );
+  };
+
+  const handleSgstRateChange = (value: string) => {
+    setSgstRate(value);
+    recalculateBillTotals(
+      Math.max(0, Number(gstSubtotal) || 0),
+      Math.max(0, Number(value) || 0),
+      Number(cgstRate) || 0,
+      Number(igstRate) || 0,
+      Number(extraCharges) || 0
+    );
+  };
+
+  const handleCgstRateChange = (value: string) => {
+    setCgstRate(value);
+    recalculateBillTotals(
+      Math.max(0, Number(gstSubtotal) || 0),
+      Number(sgstRate) || 0,
+      Math.max(0, Number(value) || 0),
+      Number(igstRate) || 0,
+      Number(extraCharges) || 0
+    );
+  };
+
+  const handleIgstRateChange = (value: string) => {
+    setIgstRate(value);
+    recalculateBillTotals(
+      Math.max(0, Number(gstSubtotal) || 0),
+      Number(sgstRate) || 0,
+      Number(cgstRate) || 0,
+      Math.max(0, Number(value) || 0),
+      Number(extraCharges) || 0
+    );
   };
 
   const handleExtraChargesChange = (value: string) => {
     setExtraCharges(value);
-    const extraNum = Math.max(0, Number(value) || 0);
-    const subNum = Math.max(0, Number(gstSubtotal) || 0);
-    const taxNum = Math.max(0, Number(taxAmount) || 0);
-    setGstTotal((subNum + taxNum + extraNum).toFixed(2));
+    recalculateTotalFromAmounts(
+      Math.max(0, Number(gstSubtotal) || 0),
+      Math.max(0, Number(sgstAmount) || 0),
+      Math.max(0, Number(cgstAmount) || 0),
+      Math.max(0, Number(igstAmount) || 0),
+      Math.max(0, Number(value) || 0)
+    );
   };
 
   const filteredFirms = useMemo(() => {
@@ -425,9 +522,15 @@ export default function AddSalePage() {
       });
     }
 
-    const totalNum = Number(gstTotal);
+    const totalNum = Math.ceil(Number((Number(gstTotal) || 0).toFixed(2)));
     const subtotalNum = Number(gstSubtotal);
     const taxNum = Number(taxAmount);
+    const sgstRateNum = Math.max(0, Number(sgstRate) || 0);
+    const sgstAmountNum = Math.max(0, Number(sgstAmount) || 0);
+    const cgstRateNum = Math.max(0, Number(cgstRate) || 0);
+    const cgstAmountNum = Math.max(0, Number(cgstAmount) || 0);
+    const igstRateNum = Math.max(0, Number(igstRate) || 0);
+    const igstAmountNum = Math.max(0, Number(igstAmount) || 0);
     const extraChargesNum = Math.max(0, Number(extraCharges) || 0);
 
     if (isNaN(totalNum) || totalNum <= 0) {
@@ -438,6 +541,12 @@ export default function AddSalePage() {
     setIsSaving(true);
 
     try {
+      // Check existing firm dealer gst_balance before adding this bill
+      const existingBalances = await getDealerGstBalances(dealerId);
+      const existingFirmBal = existingBalances.find((b) => b.firm_id === firmId);
+      const gstOldBalance = Number(existingFirmBal?.gst_balance || 0);
+      const gstNewBalance = gstOldBalance + totalNum;
+
       // 1. Insert sales_bills & sales_bill_items
       const { data: savedSale, error: saleErr } = await addSaleBill(
         {
@@ -448,9 +557,19 @@ export default function AddSalePage() {
           date,
           gst_subtotal: isNaN(subtotalNum) ? 0 : subtotalNum,
           tax_amount: isNaN(taxNum) ? 0 : taxNum,
+          sgst_rate: sgstRateNum,
+          sgst_amount: sgstAmountNum,
+          cgst_rate: cgstRateNum,
+          cgst_amount: cgstAmountNum,
+          igst_rate: igstRateNum,
+          igst_amount: igstAmountNum,
           extra_charges: isNaN(extraChargesNum) ? 0 : extraChargesNum,
           gst_total: totalNum,
           grand_total: totalNum,
+          gst_old_balance: gstOldBalance,
+          gst_new_balance: gstNewBalance,
+          vehicle_number: vehicleNumber.trim() || null,
+          transporter_name: transporterName.trim() || null,
           notes: notes.trim(),
         },
         preparedItems
@@ -564,10 +683,18 @@ export default function AddSalePage() {
       dealer_address: selectedDealer.address || null,
       dealer_gst: selectedDealer.gst_number || null,
       dealer_city: selectedDealer.city || null,
+      vehicle_number: vehicleNumber.trim() || null,
+      transporter_name: transporterName.trim() || null,
       gst_subtotal: Number(gstSubtotal) || 0,
       tax_amount: Number(taxAmount) || 0,
+      sgst_rate: Math.max(0, Number(sgstRate) || 0),
+      sgst_amount: Math.max(0, Number(sgstAmount) || 0),
+      cgst_rate: Math.max(0, Number(cgstRate) || 0),
+      cgst_amount: Math.max(0, Number(cgstAmount) || 0),
+      igst_rate: Math.max(0, Number(igstRate) || 0),
+      igst_amount: Math.max(0, Number(igstAmount) || 0),
       extra_charges: Math.max(0, Number(extraCharges) || 0),
-      gst_total: Number(gstTotal) || 0,
+      gst_total: Math.ceil(Number((Number(gstTotal) || 0).toFixed(2))),
       notes: notes.trim() || null,
       items: receiptItems,
     });
@@ -858,7 +985,7 @@ export default function AddSalePage() {
                       min="0"
                       required
                       value={gstSubtotal}
-                      onChange={(e) => setGstSubtotal(e.target.value)}
+                      onChange={(e) => handleGstSubtotalChange(e.target.value)}
                       className="input-field text-sm"
                       disabled={isSaving}
                     />
@@ -904,12 +1031,171 @@ export default function AddSalePage() {
                     <input
                       id="sale-gst-total"
                       type="number"
-                      step="0.01"
+                      step="1"
                       min="0.01"
                       required
                       value={gstTotal}
                       onChange={(e) => setGstTotal(e.target.value)}
                       className="input-field text-sm font-bold text-[var(--color-brand-deep-green)]"
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 4: SGST, CGST, IGST Rates & Auto-calculated Amounts */}
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-sgst-rate" className="form-label">
+                      SGST Rate (%)
+                    </label>
+                    <input
+                      id="sale-sgst-rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={sgstRate}
+                      onChange={(e) => handleSgstRateChange(e.target.value)}
+                      className="input-field text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-sgst-amount" className="form-label">
+                      SGST Amount
+                    </label>
+                    <input
+                      id="sale-sgst-amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={sgstAmount}
+                      onChange={(e) => {
+                        setSgstAmount(e.target.value);
+                        recalculateTotalFromAmounts(
+                          Math.max(0, Number(gstSubtotal) || 0),
+                          Math.max(0, Number(e.target.value) || 0),
+                          Math.max(0, Number(cgstAmount) || 0),
+                          Math.max(0, Number(igstAmount) || 0),
+                          Math.max(0, Number(extraCharges) || 0)
+                        );
+                      }}
+                      className="input-field text-sm bg-[var(--color-surface-hover)]"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-cgst-rate" className="form-label">
+                      CGST Rate (%)
+                    </label>
+                    <input
+                      id="sale-cgst-rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={cgstRate}
+                      onChange={(e) => handleCgstRateChange(e.target.value)}
+                      className="input-field text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-cgst-amount" className="form-label">
+                      CGST Amount
+                    </label>
+                    <input
+                      id="sale-cgst-amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={cgstAmount}
+                      onChange={(e) => {
+                        setCgstAmount(e.target.value);
+                        recalculateTotalFromAmounts(
+                          Math.max(0, Number(gstSubtotal) || 0),
+                          Math.max(0, Number(sgstAmount) || 0),
+                          Math.max(0, Number(e.target.value) || 0),
+                          Math.max(0, Number(igstAmount) || 0),
+                          Math.max(0, Number(extraCharges) || 0)
+                        );
+                      }}
+                      className="input-field text-sm bg-[var(--color-surface-hover)]"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-igst-rate" className="form-label">
+                      IGST Rate (%)
+                    </label>
+                    <input
+                      id="sale-igst-rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={igstRate}
+                      onChange={(e) => handleIgstRateChange(e.target.value)}
+                      className="input-field text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-igst-amount" className="form-label">
+                      IGST Amount
+                    </label>
+                    <input
+                      id="sale-igst-amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={igstAmount}
+                      onChange={(e) => {
+                        setIgstAmount(e.target.value);
+                        recalculateTotalFromAmounts(
+                          Math.max(0, Number(gstSubtotal) || 0),
+                          Math.max(0, Number(sgstAmount) || 0),
+                          Math.max(0, Number(cgstAmount) || 0),
+                          Math.max(0, Number(e.target.value) || 0),
+                          Math.max(0, Number(extraCharges) || 0)
+                        );
+                      }}
+                      className="input-field text-sm bg-[var(--color-surface-hover)]"
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 5: Vehicle Number & Transporter Name */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-vehicle-number" className="form-label">
+                      Vehicle Number
+                    </label>
+                    <input
+                      id="sale-vehicle-number"
+                      type="text"
+                      value={vehicleNumber}
+                      onChange={(e) => setVehicleNumber(e.target.value)}
+                      placeholder="Enter vehicle number..."
+                      className="input-field text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  <div className="form-group mb-0">
+                    <label htmlFor="sale-transporter-name" className="form-label">
+                      Transporter Name
+                    </label>
+                    <input
+                      id="sale-transporter-name"
+                      type="text"
+                      value={transporterName}
+                      onChange={(e) => setTransporterName(e.target.value)}
+                      placeholder="Enter transporter name..."
+                      className="input-field text-sm"
                       disabled={isSaving}
                     />
                   </div>
