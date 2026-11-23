@@ -419,6 +419,7 @@ function OpenSaleContent() {
                           <th className="py-3 px-4 text-right">Conv. Factor</th>
                           <th className="py-3 px-4 text-right">Base Qty</th>
                           <th className="py-3 px-4 text-right">Unit Price (GST)</th>
+                          <th className="py-3 px-4">Unit Factor</th>
                           <th className="py-3 px-4 text-right">Disc. Rate</th>
                           <th className="py-3 px-4 text-right">Disc. Amt</th>
                           <th className="py-3 px-4 text-right">Tax Rate</th>
@@ -429,7 +430,7 @@ function OpenSaleContent() {
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {!sale.items || sale.items.length === 0 ? (
                           <tr>
-                            <td colSpan={13} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={14} className="py-10 text-center text-[var(--color-text-muted)]">
                               No items found for this sale bill.
                             </td>
                           </tr>
@@ -474,6 +475,10 @@ function OpenSaleContent() {
 
                               <td className="py-3.5 px-4 text-right text-[var(--color-text-primary)]">
                                 {formatCurrency(item.gst_unit_price)}
+                              </td>
+
+                              <td className="py-3.5 px-4 text-[var(--color-text-secondary)]">
+                                {item.gst_unit_price_factor || 'qty'}
                               </td>
 
                               <td className="py-3.5 px-4 text-right text-[var(--color-text-secondary)]">

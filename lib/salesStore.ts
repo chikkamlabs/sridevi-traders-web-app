@@ -4,6 +4,8 @@ import { getDealers } from '@/lib/dealersStore';
 import { getProducts } from '@/lib/productsStore';
 import { getAllProductVariants } from '@/lib/productvariantsStore';
 
+export type UnitPriceFactor = 'qty' | 'base_qty';
+
 export interface SaleBillItem {
   id: string;
   sales_bill_id: string;
@@ -16,10 +18,12 @@ export interface SaleBillItem {
   discount_amount: number;
   discount_rate: number;
   gst_unit_price: number;
+  gst_unit_price_factor?: UnitPriceFactor;
   tax_rate: number;
   tax_amount: number;
   gst_total_price: number;
   n_gst_unit_price: number;
+  n_gst_unit_price_factor?: UnitPriceFactor;
   n_gst_total_price: number;
   product_name?: string;
   product_code?: string;
@@ -41,10 +45,12 @@ export interface SaleBillItemInput {
   discount_amount: number;
   discount_rate: number;
   gst_unit_price: number;
+  gst_unit_price_factor?: UnitPriceFactor;
   tax_rate: number;
   tax_amount: number;
   gst_total_price: number;
   n_gst_unit_price?: number;
+  n_gst_unit_price_factor?: UnitPriceFactor;
   n_gst_total_price?: number;
 }
 
@@ -75,6 +81,7 @@ export interface SaleBill {
   igst_amount?: number;
   vehicle_number?: string | null;
   transporter_name?: string | null;
+  n_gst_updated?: boolean;
   notes: string | null;
   created_by?: string | null;
   firm_name?: string;
@@ -328,6 +335,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           igst_amount,
           vehicle_number,
           transporter_name,
+          n_gst_updated,
           notes,
           created_by,
           created_at,
@@ -353,10 +361,12 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
             discount_amount,
             discount_rate,
             gst_unit_price,
+            gst_unit_price_factor,
             tax_rate,
             tax_amount,
             gst_total_price,
             n_gst_unit_price,
+            n_gst_unit_price_factor,
             n_gst_total_price,
             created_at,
             updated_at,
@@ -378,10 +388,12 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           discount_amount: Number(item.discount_amount || 0),
           discount_rate: Number(item.discount_rate || 0),
           gst_unit_price: Number(item.gst_unit_price || 0),
+          gst_unit_price_factor: item.gst_unit_price_factor || 'qty',
           tax_rate: Number(item.tax_rate || 0),
           tax_amount: Number(item.tax_amount || 0),
           gst_total_price: Number(item.gst_total_price || 0),
           n_gst_unit_price: Number(item.n_gst_unit_price || 0),
+          n_gst_unit_price_factor: item.n_gst_unit_price_factor || 'qty',
           n_gst_total_price: Number(item.n_gst_total_price || 0),
           product_name: item.products?.name || 'Product',
           product_code: item.products?.product_code || '',
@@ -421,6 +433,7 @@ export async function getSaleBillById(id: string): Promise<SaleBill | null> {
           igst_amount: Number(s.igst_amount || 0),
           vehicle_number: s.vehicle_number || null,
           transporter_name: s.transporter_name || null,
+          n_gst_updated: Boolean(s.n_gst_updated ?? false),
           notes: s.notes || null,
           created_by: s.created_by || null,
           firm_name: s.firms?.name || 'Firm',
@@ -578,10 +591,12 @@ export async function addSaleBill(
         discount_amount: Number(item.discount_amount || 0),
         discount_rate: Number(item.discount_rate || 0),
         gst_unit_price: Number(item.gst_unit_price || 0),
+        gst_unit_price_factor: item.gst_unit_price_factor || 'qty',
         tax_rate: Number(item.tax_rate || 0),
         tax_amount: Number(item.tax_amount || 0),
         gst_total_price: Number(item.gst_total_price || 0),
         n_gst_unit_price: Number(item.n_gst_unit_price || 0),
+        n_gst_unit_price_factor: item.n_gst_unit_price_factor || 'qty',
         n_gst_total_price: Number(item.n_gst_total_price || 0),
       }));
 
@@ -620,6 +635,7 @@ export async function addSaleBill(
         igst_amount: Number(createdSale.igst_amount || 0),
         vehicle_number: createdSale.vehicle_number || null,
         transporter_name: createdSale.transporter_name || null,
+        n_gst_updated: Boolean(createdSale.n_gst_updated ?? false),
         notes: createdSale.notes,
         created_at: createdSale.created_at,
         updated_at: createdSale.updated_at,
@@ -635,10 +651,12 @@ export async function addSaleBill(
           discount_amount: Number(it.discount_amount),
           discount_rate: Number(it.discount_rate),
           gst_unit_price: Number(it.gst_unit_price),
+          gst_unit_price_factor: it.gst_unit_price_factor || 'qty',
           tax_rate: Number(it.tax_rate),
           tax_amount: Number(it.tax_amount),
           gst_total_price: Number(it.gst_total_price),
           n_gst_unit_price: Number(it.n_gst_unit_price),
+          n_gst_unit_price_factor: it.n_gst_unit_price_factor || 'qty',
           n_gst_total_price: Number(it.n_gst_total_price),
           created_at: it.created_at,
           updated_at: it.updated_at,
@@ -680,10 +698,12 @@ export async function addSaleBill(
     discount_amount: Number(item.discount_amount || 0),
     discount_rate: Number(item.discount_rate || 0),
     gst_unit_price: Number(item.gst_unit_price || 0),
+    gst_unit_price_factor: item.gst_unit_price_factor || 'qty',
     tax_rate: Number(item.tax_rate || 0),
     tax_amount: Number(item.tax_amount || 0),
     gst_total_price: Number(item.gst_total_price || 0),
     n_gst_unit_price: Number(item.n_gst_unit_price || 0),
+    n_gst_unit_price_factor: item.n_gst_unit_price_factor || 'qty',
     n_gst_total_price: Number(item.n_gst_total_price || 0),
     created_at: nowIso,
     updated_at: nowIso,
