@@ -172,11 +172,11 @@ export async function downloadNsaleReceipt(data: NSaleReceiptData): Promise<void
   doc.text('SRIDEVI TRADERS & CO', pageWidth / 2, 22, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10.5);
-  doc.text('Ground Floor, Flat no. 36-3-142/7, SriRam Nagar', pageWidth / 2, 28, {
+  doc.setFontSize(9);
+  doc.text('Ground Floor, Flat no. 36-3-142/7, Kommula Peddiraju Plaza, Sri Rama Nagar,', pageWidth / 2, 28, {
     align: 'center',
   });
-  doc.text('Mandapaka Road, Pydiparru, Tanuku, W.G DT, AP - 534211', pageWidth / 2, 33, {
+  doc.text('Mandapaka Road, Pydiparru, Tanuku, West Godavari District, Andhra Pradesh - 534211', pageWidth / 2, 33, {
     align: 'center',
   });
 
@@ -376,146 +376,244 @@ export async function downloadNsaleReceipt(data: NSaleReceiptData): Promise<void
     { boldValue: true, fontSize: 9.5 }
   );
 
-  let summaryY = tableEndY + 13;
+  // Summary layout
+  const summaryY = tableEndY + 12;
 
   const hasNotes = Boolean(data.notes && data.notes.trim());
   const wrappedNotes = hasNotes
     ? (doc.splitTextToSize(data.notes!.trim(), pageWidth - margin * 2) as string[])
     : [];
-  const notesBlockHeight = hasNotes ? 9 + wrappedNotes.length * 4.5 : 0;
-  const summaryBoxHeight = 32;
-  const financialsGap = 5;
-  const financialsBoxHeight = 20;
-  const bottomBlockHeight = 36;
+
+  const summaryBoxHeight = 43;
+  const totalsBoxWidth = 78;
+  const summaryGap = 5;
+  const financialsBoxWidth =
+    pageWidth - margin * 2 - totalsBoxWidth - summaryGap;
+
+  const financialsBoxX = margin;
+  const totalsBoxX = financialsBoxX + financialsBoxWidth + summaryGap;
+
+  const notesBlockHeight = hasNotes
+    ? 9 + wrappedNotes.length * 4.5
+    : 0;
+
+  const signBoxWidth = 78;
+  const signBoxHeight = 30;
   const bottomLimitY = pageHeight - borderBottomMargin - 6;
 
-  // Prevent Totals + Financials + Notes overflow
-  if (
-    summaryY +
-      summaryBoxHeight +
-      financialsGap +
-      financialsBoxHeight +
-      notesBlockHeight >
-    bottomLimitY
-  ) {
+  // Calculate required space for summary, notes and signature
+  const requiredHeight =
+    summaryBoxHeight +
+    (hasNotes ? 8 + notesBlockHeight : 0) +
+    8 +
+    signBoxHeight;
+
+  let finalSummaryY = summaryY;
+
+  // Move summary to a new page only when required
+  if (finalSummaryY + requiredHeight > bottomLimitY) {
     doc.addPage();
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    summaryY = 16;
+    finalSummaryY = 16;
   }
 
-  // Right Box: Subtotal, Total Amount
-  const totalsBoxWidth = 78;
-  const totalsBoxX = pageWidth - margin - totalsBoxWidth;
+  // ==========================================
+  // LEFT BOX: FINANCIALS
+  // ==========================================
 
-  // Totals Box (Right): Subtotal and Total only
+  const oldNGstBalance = Number(data.old_n_gst_balance ?? 0);
+
+  const currentNGstBalance = Number(
+    data.current_n_gst_balance ??
+      oldNGstBalance + Number(data.n_gst_total || 0)
+  );
+
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
-  doc.rect(totalsBoxX, summaryY, totalsBoxWidth, summaryBoxHeight, 'FD');
 
+  doc.rect(
+    financialsBoxX,
+    finalSummaryY,
+    financialsBoxWidth,
+    summaryBoxHeight,
+    'FD'
+  );
+
+  doc.setTextColor(0, 0, 0);
+
+// Financials heading
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(9.5);
+doc.text('Financials', financialsBoxX + 4, finalSummaryY + 6);
+
+// Old Balance
+doc.setFont('helvetica', 'normal');
+doc.setFontSize(8.5);
+doc.text('Old Balance', financialsBoxX + 4, finalSummaryY + 13);
+
+doc.setFont('helvetica', 'bold');
+doc.text(
+  formatRs(oldNGstBalance),
+  financialsBoxX + financialsBoxWidth - 4,
+  finalSummaryY + 13,
+  { align: 'right' }
+);
+
+// Bill Amount
+doc.setFont('helvetica', 'normal');
+doc.text('Bill Amount (+)', financialsBoxX + 4, finalSummaryY + 20);
+
+doc.setFont('helvetica', 'bold');
+doc.text(
+  formatRs(data.n_gst_total),
+  financialsBoxX + financialsBoxWidth - 4,
+  finalSummaryY + 20,
+  { align: 'right' }
+);
+
+// Separator
+doc.setDrawColor(0, 0, 0);
+doc.setLineWidth(0.2);
+doc.line(
+  financialsBoxX + 4,
+  finalSummaryY + 24,
+  financialsBoxX + financialsBoxWidth - 4,
+  finalSummaryY + 24
+);
+
+// Final Balance
+doc.setFont('helvetica', 'bold');
+doc.setFontSize(9);
+
+doc.text(
+  'Final Balance:',
+  financialsBoxX + 4,
+  finalSummaryY + 34
+);
+
+doc.text(
+  formatRs(currentNGstBalance),
+  financialsBoxX + financialsBoxWidth - 4,
+  finalSummaryY + 34,
+  { align: 'right' }
+);
+  // ==========================================
+  // RIGHT BOX: SUBTOTAL AND TOTAL
+  // ==========================================
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setFillColor(255, 255, 255);
+  doc.setLineWidth(0.3);
+
+  doc.rect(
+    totalsBoxX,
+    finalSummaryY,
+    totalsBoxWidth,
+    summaryBoxHeight,
+    'FD'
+  );
+
+  // Subtotal
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
 
-  doc.text('Subtotal:', totalsBoxX + 4, summaryY + 10);
-  doc.text(formatRs(data.n_gst_subtotal), totalsBoxX + totalsBoxWidth - 4, summaryY + 10, {
-    align: 'right',
-  });
+  doc.text('Subtotal:', totalsBoxX + 4, finalSummaryY + 10);
 
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.3);
-  doc.line(totalsBoxX + 4, summaryY + 15.5, totalsBoxX + totalsBoxWidth - 4, summaryY + 15.5);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(0, 0, 0);
-  doc.text('Total:', totalsBoxX + 4, summaryY + 24.5);
-  doc.text(formatRs(data.n_gst_total), totalsBoxX + totalsBoxWidth - 4, summaryY + 24.5, {
-    align: 'right',
-  });
-
-  // Financials Box: Old Balance + Bill Amount = Final Balance
-  const oldNGstBalance = Number(data.old_n_gst_balance ?? 0);
-  const currentNGstBalance = Number(
-    data.current_n_gst_balance ?? oldNGstBalance + Number(data.n_gst_total || 0)
+  doc.text(
+    formatRs(data.n_gst_subtotal),
+    totalsBoxX + totalsBoxWidth - 4,
+    finalSummaryY + 10,
+    { align: 'right' }
   );
 
-  const financialsY = summaryY + summaryBoxHeight + financialsGap;
+  // Divider
   doc.setDrawColor(0, 0, 0);
-  doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
-  doc.rect(margin, financialsY, pageWidth - margin * 2, financialsBoxHeight, 'FD');
 
-  doc.setTextColor(0, 0, 0);
+  doc.line(
+    totalsBoxX + 4,
+    finalSummaryY + 15.5,
+    totalsBoxX + totalsBoxWidth - 4,
+    finalSummaryY + 15.5
+  );
+
+  // Total
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('Financials', margin + 4, financialsY + 6);
+  doc.setFontSize(11);
 
-  const col1X = margin + 4;
-  const plusX = margin + 62;
-  const col2X = margin + 70;
-  const eqX = margin + 124;
-  const col3X = margin + 132;
+  doc.text('Total:', totalsBoxX + 4, finalSummaryY + 24.5);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.text('Old Balance', col1X, financialsY + 11.5);
-  doc.text('Bill Amount', col2X, financialsY + 11.5);
-  doc.text('Final Balance', col3X, financialsY + 11.5);
+  doc.text(
+    formatRs(data.n_gst_total),
+    totalsBoxX + totalsBoxWidth - 4,
+    finalSummaryY + 24.5,
+    { align: 'right' }
+  );
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text(formatRs(oldNGstBalance), col1X, financialsY + 17);
-  doc.text('+', plusX, financialsY + 15);
-  doc.text(formatRs(data.n_gst_total), col2X, financialsY + 17);
-  doc.text('=', eqX, financialsY + 15);
-  doc.text(formatRs(currentNGstBalance), col3X, financialsY + 17);
+  // ==========================================
+  // NOTES BELOW FINANCIALS AND TOTALS
+  // ==========================================
 
-  let afterSummaryY = financialsY + financialsBoxHeight;
+  let afterSummaryY = finalSummaryY + summaryBoxHeight;
 
-  // Optional Notes below Financials
   if (hasNotes) {
     const notesY = afterSummaryY + 8;
+
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(0, 0, 0);
+
     doc.text('Notes:', margin, notesY);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
+
     doc.text(wrappedNotes, margin, notesY + 5);
-    afterSummaryY = notesY + 5 + wrappedNotes.length * 4.5;
+
+    afterSummaryY =
+      notesY + 5 + wrappedNotes.length * 4.5;
   }
 
-  // Bottom Right Box: Empty box
-  let bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
-  if (afterSummaryY + 8 > bottomBlockY) {
-    doc.addPage();
-    doc.setFillColor(255, 255, 255);
-    doc.rect(0, 0, pageWidth, pageHeight, 'F');
-    bottomBlockY = pageHeight - borderBottomMargin - bottomBlockHeight - 4;
-  }
+  // ==========================================
+  // SIGNATURE BOX DIRECTLY BELOW CONTENT
+  // ==========================================
 
-  const signBoxWidth = 78;
   const signBoxX = pageWidth - margin - signBoxWidth;
+  const signBoxY = afterSummaryY + 8;
+
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
   doc.setLineWidth(0.3);
-  doc.rect(signBoxX, bottomBlockY, signBoxWidth, bottomBlockHeight, 'FD');
+
+  doc.rect(
+    signBoxX,
+    signBoxY,
+    signBoxWidth,
+    signBoxHeight,
+    'FD'
+  );
 
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
-  doc.text('For, SRIDEVI TRADERS & CO', signBoxX + signBoxWidth / 2, bottomBlockY + 7.5, {
-    align: 'center',
-  });
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  doc.text('Signature', signBoxX + signBoxWidth / 2, bottomBlockY + bottomBlockHeight - 5, {
-    align: 'center',
-  });
+  doc.text(
+    'For, SRIDEVI TRADERS & CO',
+    signBoxX + signBoxWidth / 2,
+    signBoxY + 8,
+    { align: 'center' }
+  );
+
+  doc.text(
+    'Signature',
+    signBoxX + signBoxWidth / 2,
+    signBoxY + signBoxHeight - 5,
+    { align: 'center' }
+  );
+
 
   // Draw outer page border on every page (with raised bottom line)
   const totalPages = doc.getNumberOfPages();

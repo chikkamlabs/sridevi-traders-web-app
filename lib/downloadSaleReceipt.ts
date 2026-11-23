@@ -186,11 +186,11 @@ export async function downloadSaleReceipt(data: SaleReceiptData): Promise<void> 
   doc.text('SRIDEVI TRADERS & CO', pageWidth / 2, 22, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10.5);
-  doc.text('Ground Floor, Flat no. 36-3-142/7, SriRam Nagar', pageWidth / 2, 28, {
+  doc.setFontSize(9);
+  doc.text('Ground Floor, Flat no. 36-3-142/7, Kommula Peddiraju Plaza, Sri Rama Nagar,', pageWidth / 2, 28, {
     align: 'center',
   });
-  doc.text('Mandapaka Road, Pydiparru, Tanuku, W.G DT, AP - 534211', pageWidth / 2, 33, {
+  doc.text('Mandapaka Road, Pydiparru, Tanuku, West Godavari District, Andhra Pradesh - 534211', pageWidth / 2, 33, {
     align: 'center',
   });
 
