@@ -18,6 +18,7 @@ import {
   getLast5PurchaseItemsForProduct,
   RecentPurchaseRate,
   SaleBillItemInput,
+  UnitPriceFactor,
 } from '@/lib/salesStore';
 import {
   getDealerGstBalances,
@@ -48,6 +49,7 @@ interface SaleItemRow {
   conversion_factor: string;
   base_quantity: string;
   gst_unit_price: string;
+  gst_unit_price_factor: UnitPriceFactor;
   mrp: string;
   discount_rate: string;
   discount_amount: string;
@@ -74,6 +76,7 @@ function createEmptySaleItemRow(): SaleItemRow {
     conversion_factor: '1',
     base_quantity: '1',
     gst_unit_price: '0',
+    gst_unit_price_factor: 'qty',
     mrp: '0',
     discount_rate: '0',
     discount_amount: '0',
@@ -91,8 +94,9 @@ function recalculateSaleItemAmounts(row: SaleItemRow): SaleItemRow {
   const unitPrice = Math.max(0, Number(row.gst_unit_price) || 0);
   const discRate = Math.min(100, Math.max(0, Number(row.discount_rate) || 0));
   const taxRate = Math.max(0, Number(row.tax_rate) || 0);
+  const factorQty = row.gst_unit_price_factor === 'base_qty' ? baseQty : qty;
 
-  const gross = qty * unitPrice;
+  const gross = factorQty * unitPrice;
   const discAmt = (gross * discRate) / 100;
   const taxable = Math.max(0, gross - discAmt);
   const taxAmt = (taxable * taxRate) / 100;
@@ -242,11 +246,13 @@ export default function AddSalePage() {
 
     for (const item of nextItems) {
       const qty = Math.max(0, Number(item.quantity) || 0);
+      const baseQty = Math.max(0, Number(item.base_quantity) || 0);
       const unitPrice = Math.max(0, Number(item.gst_unit_price) || 0);
+      const factorQty = item.gst_unit_price_factor === 'base_qty' ? baseQty : qty;
       const discAmt = Math.max(0, Number(item.discount_amount) || 0);
       const itemTax = Math.max(0, Number(item.tax_amount) || 0);
 
-      subTotalSum += Math.max(0, qty * unitPrice - discAmt);
+      subTotalSum += Math.max(0, factorQty * unitPrice - discAmt);
       taxSum += itemTax;
     }
 
@@ -416,6 +422,7 @@ export default function AddSalePage() {
         field === 'quantity' ||
         field === 'conversion_factor' ||
         field === 'gst_unit_price' ||
+        field === 'gst_unit_price_factor' ||
         field === 'discount_rate' ||
         field === 'tax_rate'
       ) {
@@ -424,10 +431,12 @@ export default function AddSalePage() {
 
       if (field === 'discount_amount' || field === 'tax_amount') {
         const qty = Math.max(0, Number(updated.quantity) || 0);
+        const baseQty = Math.max(0, Number(updated.base_quantity) || 0);
         const unitPrice = Math.max(0, Number(updated.gst_unit_price) || 0);
+        const factorQty = updated.gst_unit_price_factor === 'base_qty' ? baseQty : qty;
         const discAmt = Math.max(0, Number(updated.discount_amount) || 0);
         const taxAmt = Math.max(0, Number(updated.tax_amount) || 0);
-        const total = Math.max(0, qty * unitPrice - discAmt) + taxAmt;
+        const total = Math.max(0, factorQty * unitPrice - discAmt) + taxAmt;
         return {
           ...updated,
           gst_total_price: total.toFixed(2),
@@ -514,6 +523,7 @@ export default function AddSalePage() {
         conversion_factor: conv,
         base_quantity: baseQty,
         gst_unit_price: isNaN(unitPrice) ? 0 : unitPrice,
+        gst_unit_price_factor: row.gst_unit_price_factor || 'qty',
         discount_rate: isNaN(discRate) ? 0 : discRate,
         discount_amount: isNaN(discAmt) ? 0 : discAmt,
         tax_rate: isNaN(tRate) ? 0 : tRate,
@@ -1403,8 +1413,8 @@ export default function AddSalePage() {
                           </div>
                         </div>
 
-                        {/* Quantity, Sale Unit, Conversion Factor, Base Quantity, Unit Price (+ Last 5 Purchase Dropdown), MRP */}
-                        <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
+                        {/* Quantity, Sale Unit, Conversion Factor, Base Quantity, Unit Price (+ Last 5 Purchase Dropdown), Unit Factor, MRP */}
+                        <div className="grid grid-cols-2 sm:grid-cols-7 gap-3">
                           <div className="form-group mb-0">
                             <label className="form-label text-xs">
                               Quantity <span className="text-[var(--color-danger)]">*</span>
@@ -1544,6 +1554,26 @@ export default function AddSalePage() {
                                 )}
                               </div>
                             )}
+                          </div>
+
+                          <div className="form-group mb-0">
+                            <label className="form-label text-xs">Unit Factor</label>
+                            <select
+                              aria-label="Unit Factor"
+                              value={row.gst_unit_price_factor}
+                              onChange={(e) =>
+                                handleItemFieldChange(
+                                  idx,
+                                  'gst_unit_price_factor',
+                                  e.target.value as UnitPriceFactor
+                                )
+                              }
+                              className="input-field text-xs py-1.5"
+                              disabled={isSaving}
+                            >
+                              <option value="qty">qty</option>
+                              <option value="base_qty">base_qty</option>
+                            </select>
                           </div>
 
                           <div className="form-group mb-0">

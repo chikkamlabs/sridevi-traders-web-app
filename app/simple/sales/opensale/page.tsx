@@ -9,6 +9,7 @@ import {
   getSimpleSaleBillById,
   updateSimpleSaleBillNGst,
   SimpleSaleBill,
+  SimpleUnitPriceFactor,
 } from '@/lib/simple/nsalesStore';
 import { recordSimpleSaleDealerTransaction } from '@/lib/simple/ndealertrasacationsStore';
 import {
@@ -35,6 +36,7 @@ import {
 interface EditableSaleItemState {
   id: string;
   n_gst_unit_price: string;
+  n_gst_unit_price_factor: SimpleUnitPriceFactor;
   n_gst_total_price: string;
 }
 
@@ -96,6 +98,7 @@ function SimpleOpenSaleContent() {
           itemsState[item.id] = {
             id: item.id,
             n_gst_unit_price: Number(item.n_gst_unit_price || 0).toFixed(2),
+            n_gst_unit_price_factor: item.n_gst_unit_price_factor || 'qty',
             n_gst_total_price: Number(item.n_gst_total_price || 0).toFixed(2),
           };
         }
@@ -128,15 +131,49 @@ function SimpleOpenSaleContent() {
     setNGstTotal(sum.toFixed(2));
   };
 
-  const handleItemUnitPriceChange = (itemId: string, quantity: number, value: string) => {
+  const handleItemUnitPriceChange = (
+    itemId: string,
+    quantity: number,
+    baseQuantity: number,
+    value: string
+  ) => {
+    const current = editableItems[itemId];
+    const factor: SimpleUnitPriceFactor = current?.n_gst_unit_price_factor || 'qty';
+    const multiplier = factor === 'base_qty' ? baseQuantity : quantity;
     const unitPrice = Math.max(0, Number(value) || 0);
-    const totalPrice = (quantity * unitPrice).toFixed(2);
+    const totalPrice = (multiplier * unitPrice).toFixed(2);
 
     const nextMap: Record<string, EditableSaleItemState> = {
       ...editableItems,
       [itemId]: {
         id: itemId,
         n_gst_unit_price: value,
+        n_gst_unit_price_factor: factor,
+        n_gst_total_price: totalPrice,
+      },
+    };
+    setEditableItems(nextMap);
+    recalcSaleNGstTotals(nextMap);
+  };
+
+  const handleItemUnitFactorChange = (
+    itemId: string,
+    quantity: number,
+    baseQuantity: number,
+    factor: SimpleUnitPriceFactor
+  ) => {
+    const current = editableItems[itemId];
+    const unitPriceStr = current?.n_gst_unit_price ?? '0.00';
+    const unitPrice = Math.max(0, Number(unitPriceStr) || 0);
+    const multiplier = factor === 'base_qty' ? baseQuantity : quantity;
+    const totalPrice = (multiplier * unitPrice).toFixed(2);
+
+    const nextMap: Record<string, EditableSaleItemState> = {
+      ...editableItems,
+      [itemId]: {
+        id: itemId,
+        n_gst_unit_price: unitPriceStr,
+        n_gst_unit_price_factor: factor,
         n_gst_total_price: totalPrice,
       },
     };
@@ -148,6 +185,7 @@ function SimpleOpenSaleContent() {
     const current = editableItems[itemId] || {
       id: itemId,
       n_gst_unit_price: '0.00',
+      n_gst_unit_price_factor: 'qty' as SimpleUnitPriceFactor,
       n_gst_total_price: '0.00',
     };
     const nextMap: Record<string, EditableSaleItemState> = {
@@ -186,6 +224,7 @@ function SimpleOpenSaleContent() {
       return {
         id: item.id,
         n_gst_unit_price: Math.max(0, Number(edited?.n_gst_unit_price || 0)),
+        n_gst_unit_price_factor: edited?.n_gst_unit_price_factor || 'qty',
         n_gst_total_price: Math.max(0, Number(edited?.n_gst_total_price || 0)),
       };
     });
@@ -635,13 +674,14 @@ function SimpleOpenSaleContent() {
                           <th className="py-3 px-4 text-right">Tax Amt</th>
                           <th className="py-3 px-4 text-right">Total Price (GST)</th>
                           <th className="py-3 px-4 text-right">N-GST Unit Price</th>
+                          <th className="py-3 px-4">Unit Factor</th>
                           <th className="py-3 px-4 text-right">N-GST Total Price</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {!sale.items || sale.items.length === 0 ? (
                           <tr>
-                            <td colSpan={15} className="py-10 text-center text-[var(--color-text-muted)]">
+                            <td colSpan={16} className="py-10 text-center text-[var(--color-text-muted)]">
                               No items found for this sale bill.
                             </td>
                           </tr>
@@ -650,6 +690,7 @@ function SimpleOpenSaleContent() {
                             const editState = editableItems[item.id] || {
                               id: item.id,
                               n_gst_unit_price: Number(item.n_gst_unit_price || 0).toFixed(2),
+                              n_gst_unit_price_factor: item.n_gst_unit_price_factor || 'qty',
                               n_gst_total_price: Number(item.n_gst_total_price || 0).toFixed(2),
                             };
 
@@ -723,11 +764,36 @@ function SimpleOpenSaleContent() {
                                     aria-label={`N-GST Unit Price for ${item.product_name || 'item'}`}
                                     value={editState.n_gst_unit_price}
                                     onChange={(e) =>
-                                      handleItemUnitPriceChange(item.id, item.quantity, e.target.value)
+                                      handleItemUnitPriceChange(
+                                        item.id,
+                                        item.quantity,
+                                        item.base_quantity,
+                                        e.target.value
+                                      )
                                     }
                                     className="input-field py-1.5 px-2.5 text-right text-sm min-w-[110px]"
                                     disabled={isSaving}
                                   />
+                                </td>
+
+                                <td className="py-3.5 px-4 min-w-[115px]">
+                                  <select
+                                    aria-label={`Unit Factor for ${item.product_name || 'item'}`}
+                                    value={editState.n_gst_unit_price_factor}
+                                    onChange={(e) =>
+                                      handleItemUnitFactorChange(
+                                        item.id,
+                                        item.quantity,
+                                        item.base_quantity,
+                                        e.target.value as SimpleUnitPriceFactor
+                                      )
+                                    }
+                                    className="input-field py-1.5 px-2 text-sm min-w-[100px]"
+                                    disabled={isSaving}
+                                  >
+                                    <option value="qty">qty</option>
+                                    <option value="base_qty">base_qty</option>
+                                  </select>
                                 </td>
 
                                 <td className="py-3.5 px-4 text-right min-w-[130px]">
