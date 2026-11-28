@@ -956,3 +956,63 @@ export async function applySaleStockAndMovements(params: {
   return { success: true, error: null };
 }
 
+/**
+ * Update vehicle_number and transporter_name on a sale bill.
+ */
+export async function updateSaleBillTransportDetails(params: {
+  saleId: string;
+  vehicle_number: string | null;
+  transporter_name: string | null;
+}): Promise<{ success: boolean; error: string | null }> {
+  const { saleId, vehicle_number, transporter_name } = params;
+
+  if (!saleId) {
+    return { success: false, error: 'Sale ID is required.' };
+  }
+
+  const nowIso = new Date().toISOString();
+  const cleanVehicle = vehicle_number?.trim() || null;
+  const cleanTransporter = transporter_name?.trim() || null;
+
+  if (isSupabaseConfigured) {
+    try {
+      const { error } = await supabase
+        .from('sales_bills')
+        .update({
+          vehicle_number: cleanVehicle,
+          transporter_name: cleanTransporter,
+          updated_at: nowIso,
+        })
+        .eq('id', saleId);
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Failed to update vehicle and transporter details.';
+      return { success: false, error: msg };
+    }
+  }
+
+  const localSales = getLocalSalesBills();
+  if (localSales.length > 0) {
+    const updatedSales = localSales.map((s) =>
+      s.id === saleId
+        ? {
+            ...s,
+            vehicle_number: cleanVehicle,
+            transporter_name: cleanTransporter,
+            updated_at: nowIso,
+          }
+        : s
+    );
+    saveLocalSalesBills(updatedSales);
+  }
+
+  return { success: true, error: null };
+}
+
+

@@ -81,6 +81,26 @@ function formatDateDDMMYYYY(dateStr: string | null | undefined): string {
   return trimmed;
 }
 
+function calculateDaysCompleted(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  const trimmed = dateStr.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  let billTime: number;
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    billTime = Date.UTC(year, month, day);
+  } else {
+    const parsed = new Date(trimmed);
+    if (isNaN(parsed.getTime())) return 0;
+    billTime = Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  }
+  const now = new Date();
+  const todayTime = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.floor((todayTime - billTime) / (1000 * 60 * 60 * 24)));
+}
+
 function drawLabelAndValue(
   doc: jsPDF,
   label: string,
@@ -237,12 +257,9 @@ export async function downloadSaleReceipt(data: SaleReceiptData): Promise<void> 
     Math.max(25, halfWidth - 8 - addressPrefixWidth - 1)
   ) as string[];
 
-  const extraLines = Math.max(
-    0,
-    wrappedTransporter.length - 1,
-    wrappedDealerAddress.length - 1
-  );
-  const infoBoxHeight = 37 + extraLines * 5;
+  const leftBottom = 32.5 + Math.max(0, wrappedTransporter.length - 1) * 5 + 4.5;
+  const rightBottom = 38.5 + Math.max(0, wrappedDealerAddress.length - 1) * 5 + 4.5;
+  const infoBoxHeight = Math.max(leftBottom, rightBottom);
 
   doc.setDrawColor(0, 0, 0);
   doc.setFillColor(255, 255, 255);
@@ -300,27 +317,31 @@ export async function downloadSaleReceipt(data: SaleReceiptData): Promise<void> 
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', midX, currentY + 20.5, {
+  drawLabelAndValue(doc, 'GST No.:', data.dealer_gst?.trim() || '-', midX, currentY + 20.5, {
     boldValue: true,
     fontSize: 10,
   });
-  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', midX, currentY + 26.5, {
+  drawLabelAndValue(doc, 'Phone:', data.dealer_phone || '-', midX, currentY + 26.5, {
+    boldValue: true,
+    fontSize: 10,
+  });
+  drawLabelAndValue(doc, 'City:', data.dealer_city || '-', midX, currentY + 32.5, {
     boldValue: true,
     fontSize: 10,
   });
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text(addressPrefix, midX, currentY + 32.5);
+  doc.text(addressPrefix, midX, currentY + 38.5);
   doc.setFont('helvetica', 'normal');
   wrappedDealerAddress.forEach((line, idx) => {
-    doc.text(line, midX + addressPrefixWidth + 1, currentY + 32.5 + idx * 5);
+    doc.text(line, midX + addressPrefixWidth + 1, currentY + 38.5 + idx * 5);
   });
 
   currentY += infoBoxHeight + 8;
 
-  // Items Table (#, HSN Code, Product, Base Qty, Total)
-  const tableHead = [['#', 'HSN Code', 'Product', 'Base Qty', 'Total']];
+  // Items Table (#, HSN Code, Product, Base Qty, Unit Price, Total)
+  const tableHead = [['#', 'HSN Code', 'Product', 'Base Qty', 'Unit Price', 'Total']];
 
   const tableBody = data.items.map((item, idx) => {
     const prodLabel = item.product_name;
@@ -333,6 +354,7 @@ export async function downloadSaleReceipt(data: SaleReceiptData): Promise<void> 
       item.hsn_code?.trim() || '-',
       prodLabel,
       baseQtyLabel,
+      formatRs(item.gst_unit_price),
       formatRs(item.gst_total_price),
     ];
   });
@@ -367,10 +389,11 @@ export async function downloadSaleReceipt(data: SaleReceiptData): Promise<void> 
     },
     columnStyles: {
       0: { halign: 'center', cellWidth: 10 },
-      1: { halign: 'center', cellWidth: 26 },
-      2: { halign: 'left', cellWidth: 84 },
-      3: { halign: 'right', cellWidth: 32 },
-      4: { halign: 'right', cellWidth: 32, fontStyle: 'bold' },
+      1: { halign: 'center', cellWidth: 22 },
+      2: { halign: 'left', cellWidth: 68 },
+      3: { halign: 'right', cellWidth: 28 },
+      4: { halign: 'right', cellWidth: 28 },
+      5: { halign: 'right', cellWidth: 28, fontStyle: 'bold' },
     },
   });
 
@@ -584,6 +607,13 @@ export async function downloadSaleReceipt(data: SaleReceiptData): Promise<void> 
   doc.text('Signature', signBoxX + signBoxWidth / 2, bottomBlockY + bottomBlockHeight - 5, {
     align: 'center',
   });
+
+  // Left Bottom: Days Completed
+  const daysCompleted = calculateDaysCompleted(data.date);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(`Days Completed : ${daysCompleted}`, margin, bottomBlockY + bottomBlockHeight - 5);
 
   // Draw outer page border on every page (with raised bottom line)
   const totalPages = doc.getNumberOfPages();

@@ -46,6 +46,7 @@ export interface SimpleSaleBill {
   n_gst_subtotal: number;
   tax_rate: number;
   tax_amount: number;
+  ngst_extra_charges?: number;
   gst_total: number;
   n_gst_total: number;
   grand_total: number;
@@ -134,6 +135,7 @@ export async function getSimpleSalesBills(options?: {
           n_gst_subtotal,
           tax_rate,
           tax_amount,
+          ngst_extra_charges,
           gst_total,
           n_gst_total,
           grand_total,
@@ -168,6 +170,7 @@ export async function getSimpleSalesBills(options?: {
           n_gst_subtotal: Number(row.n_gst_subtotal || 0),
           tax_rate: Number(row.tax_rate || 0),
           tax_amount: Number(row.tax_amount || 0),
+          ngst_extra_charges: Number(row.ngst_extra_charges || 0),
           gst_total: Number(row.gst_total || 0),
           n_gst_total: Number(row.n_gst_total || 0),
           grand_total: Number(row.grand_total || 0),
@@ -234,6 +237,7 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
           n_gst_subtotal,
           tax_rate,
           tax_amount,
+          ngst_extra_charges,
           gst_total,
           n_gst_total,
           grand_total,
@@ -323,6 +327,7 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
           n_gst_subtotal: Number(s.n_gst_subtotal || 0),
           tax_rate: Number(s.tax_rate || 0),
           tax_amount: Number(s.tax_amount || 0),
+          ngst_extra_charges: Number(s.ngst_extra_charges || 0),
           gst_total: Number(s.gst_total || 0),
           n_gst_total: Number(s.n_gst_total || 0),
           grand_total: Number(s.grand_total || 0),
@@ -395,6 +400,7 @@ export async function getSimpleSaleBillById(id: string): Promise<SimpleSaleBill 
 export async function updateSimpleSaleBillNGst(params: {
   saleId: string;
   n_gst_subtotal: number;
+  ngst_extra_charges?: number;
   n_gst_total: number;
   n_gst_old_balance?: number;
   n_gst_new_balance?: number;
@@ -410,6 +416,7 @@ export async function updateSimpleSaleBillNGst(params: {
   const {
     saleId,
     n_gst_subtotal,
+    ngst_extra_charges,
     n_gst_total,
     n_gst_old_balance,
     n_gst_new_balance,
@@ -422,7 +429,7 @@ export async function updateSimpleSaleBillNGst(params: {
     return { success: false, error: 'Sale ID is required.' };
   }
 
-  if (n_gst_subtotal < 0 || n_gst_total < 0) {
+  if (n_gst_subtotal < 0 || n_gst_total < 0 || (ngst_extra_charges !== undefined && ngst_extra_charges < 0)) {
     return { success: false, error: 'N-GST amounts cannot be negative.' };
   }
 
@@ -441,6 +448,9 @@ export async function updateSimpleSaleBillNGst(params: {
         n_gst_total: Number(n_gst_total),
         updated_at: nowIso,
       };
+      if (ngst_extra_charges !== undefined) {
+        updatePayload.ngst_extra_charges = Number(ngst_extra_charges);
+      }
       if (n_gst_old_balance !== undefined) {
         updatePayload.n_gst_old_balance = Number(n_gst_old_balance);
       }
@@ -494,6 +504,9 @@ export async function updateSimpleSaleBillNGst(params: {
         ? {
             ...s,
             n_gst_subtotal: Number(n_gst_subtotal),
+            ...(ngst_extra_charges !== undefined
+              ? { ngst_extra_charges: Number(ngst_extra_charges) }
+              : {}),
             n_gst_total: Number(n_gst_total),
             ...(n_gst_old_balance !== undefined
               ? { n_gst_old_balance: Number(n_gst_old_balance) }
