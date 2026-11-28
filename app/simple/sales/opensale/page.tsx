@@ -63,6 +63,7 @@ function SimpleOpenSaleContent() {
 
   // Editable N-GST sale fields
   const [nGstSubtotal, setNGstSubtotal] = useState('0.00');
+  const [ngstExtraCharges, setNgstExtraCharges] = useState('0.00');
   const [nGstTotal, setNGstTotal] = useState('0.00');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [transporterName, setTransporterName] = useState('');
@@ -89,6 +90,7 @@ function SimpleOpenSaleContent() {
       if (data) {
         setSale(data);
         setNGstSubtotal(Number(data.n_gst_subtotal || 0).toFixed(2));
+        setNgstExtraCharges(Number(data.ngst_extra_charges || 0).toFixed(2));
         setNGstTotal(Number(data.n_gst_total || 0).toFixed(2));
         setVehicleNumber(data.vehicle_number || '');
         setTransporterName(data.transporter_name || '');
@@ -122,13 +124,31 @@ function SimpleOpenSaleContent() {
     fetchSaleDetails();
   }, [saleId]);
 
-  const recalcSaleNGstTotals = (nextItemsMap: Record<string, EditableSaleItemState>) => {
+  const recalcSaleNGstTotals = (
+    nextItemsMap: Record<string, EditableSaleItemState>,
+    extraChargesValue: string = ngstExtraCharges
+  ) => {
     const sum = Object.values(nextItemsMap).reduce(
       (acc, it) => acc + (Number(it.n_gst_total_price) || 0),
       0
     );
+    const extra = Math.max(0, Number(extraChargesValue) || 0);
     setNGstSubtotal(sum.toFixed(2));
-    setNGstTotal(sum.toFixed(2));
+    setNGstTotal((sum + extra).toFixed(2));
+  };
+
+  const handleNGstSubtotalChange = (value: string) => {
+    setNGstSubtotal(value);
+    const sub = Math.max(0, Number(value) || 0);
+    const extra = Math.max(0, Number(ngstExtraCharges) || 0);
+    setNGstTotal((sub + extra).toFixed(2));
+  };
+
+  const handleNGstExtraChargesChange = (value: string) => {
+    setNgstExtraCharges(value);
+    const sub = Math.max(0, Number(nGstSubtotal) || 0);
+    const extra = Math.max(0, Number(value) || 0);
+    setNGstTotal((sub + extra).toFixed(2));
   };
 
   const handleItemUnitPriceChange = (
@@ -207,10 +227,16 @@ function SimpleOpenSaleContent() {
     setSuccessMsg(null);
 
     const parsedSubtotal = Number(nGstSubtotal || 0);
+    const parsedExtraCharges = Number(ngstExtraCharges || 0);
     const parsedTotal = Number(nGstTotal || 0);
 
     if (isNaN(parsedSubtotal) || parsedSubtotal < 0) {
       setError('N-GST Subtotal must be a valid non-negative number.');
+      return;
+    }
+
+    if (isNaN(parsedExtraCharges) || parsedExtraCharges < 0) {
+      setError('N-GST Extra Charges must be a valid non-negative number.');
       return;
     }
 
@@ -237,11 +263,12 @@ function SimpleOpenSaleContent() {
     const nGstOldBalance = Number(existingFirmBal?.n_gst_balance || 0);
     const nGstNewBalance = nGstOldBalance + parsedTotal;
 
-    // 1. Update sales_bills (n_gst_subtotal, n_gst_total, n_gst_old_balance, n_gst_new_balance)
+    // 1. Update sales_bills (n_gst_subtotal, ngst_extra_charges, n_gst_total, n_gst_old_balance, n_gst_new_balance)
     //    and sales_bill_items (n_gst_unit_price, n_gst_total_price)
     const updateRes = await updateSimpleSaleBillNGst({
       saleId: sale.id,
       n_gst_subtotal: parsedSubtotal,
+      ngst_extra_charges: parsedExtraCharges,
       n_gst_total: parsedTotal,
       n_gst_old_balance: nGstOldBalance,
       n_gst_new_balance: nGstNewBalance,
@@ -280,7 +307,10 @@ function SimpleOpenSaleContent() {
     if (refreshed) {
       setSale(refreshed);
       setNGstSubtotal(Number(refreshed.n_gst_subtotal || 0).toFixed(2));
+      setNgstExtraCharges(Number(refreshed.ngst_extra_charges || 0).toFixed(2));
       setNGstTotal(Number(refreshed.n_gst_total || 0).toFixed(2));
+      setVehicleNumber(refreshed.vehicle_number || '');
+      setTransporterName(refreshed.transporter_name || '');
     }
 
     const balances = await getSimpleDealerBalances(sale.dealer_id);
@@ -320,6 +350,7 @@ function SimpleOpenSaleContent() {
       vehicle_number: vehicleNumber.trim() || sale.vehicle_number || null,
       transporter_name: transporterName.trim() || sale.transporter_name || null,
       n_gst_subtotal: Number(nGstSubtotal || 0),
+      ngst_extra_charges: Number(ngstExtraCharges || 0),
       n_gst_total: billNGstTotal,
       old_n_gst_balance: oldNGstBalance,
       current_n_gst_balance: currentNGstBalance,
@@ -517,7 +548,23 @@ function SimpleOpenSaleContent() {
                         step="0.01"
                         min="0"
                         value={nGstSubtotal}
-                        onChange={(e) => setNGstSubtotal(e.target.value)}
+                        onChange={(e) => handleNGstSubtotalChange(e.target.value)}
+                        className="input-field py-1 px-2 text-sm font-semibold"
+                        disabled={isSaving}
+                      />
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-[var(--color-brand-white)] border border-[var(--color-brand-soft-green)]">
+                      <label htmlFor="sale-ngst-extra-charges" className="text-[11px] font-semibold text-[var(--color-brand-deep-green)] block mb-1">
+                        N-GST Extra Charges
+                      </label>
+                      <input
+                        id="sale-ngst-extra-charges"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={ngstExtraCharges}
+                        onChange={(e) => handleNGstExtraChargesChange(e.target.value)}
                         className="input-field py-1 px-2 text-sm font-semibold"
                         disabled={isSaving}
                       />
@@ -558,13 +605,6 @@ function SimpleOpenSaleContent() {
                         className="input-field py-1 px-2 text-sm font-bold text-[var(--color-brand-deep-green)]"
                         disabled={isSaving}
                       />
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-[var(--color-brand-light-green)] border border-[var(--color-brand-soft-green)]">
-                      <div className="text-[11px] text-[var(--color-brand-deep-green)]">Grand Total</div>
-                      <div className="text-sm font-bold text-[var(--color-brand-deep-green)] mt-0.5">
-                        {formatCurrency(sale.grand_total)}
-                      </div>
                     </div>
 
                     <div className="p-3 rounded-lg bg-[var(--color-surface-hover)] border border-[var(--color-border-subtle)]">

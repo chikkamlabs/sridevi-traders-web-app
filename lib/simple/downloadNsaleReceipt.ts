@@ -30,6 +30,7 @@ export interface NSaleReceiptData {
   vehicle_number?: string | null;
   transporter_name?: string | null;
   n_gst_subtotal: number;
+  ngst_extra_charges?: number;
   n_gst_total: number;
   old_n_gst_balance?: number;
   current_n_gst_balance?: number;
@@ -65,6 +66,26 @@ function formatDateDDMMYYYY(dateStr: string | null | undefined): string {
     return `${dd}-${mm}-${yyyy}`;
   }
   return trimmed;
+}
+
+function calculateDaysCompleted(dateStr: string | null | undefined): number {
+  if (!dateStr) return 0;
+  const trimmed = dateStr.trim();
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  let billTime: number;
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]) - 1;
+    const day = Number(isoMatch[3]);
+    billTime = Date.UTC(year, month, day);
+  } else {
+    const parsed = new Date(trimmed);
+    if (isNaN(parsed.getTime())) return 0;
+    billTime = Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  }
+  const now = new Date();
+  const todayTime = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0, Math.floor((todayTime - billTime) / (1000 * 60 * 60 * 24)));
 }
 
 function drawLabelAndValue(
@@ -401,9 +422,10 @@ export async function downloadNsaleReceipt(data: NSaleReceiptData): Promise<void
   const signBoxHeight = 30;
   const bottomLimitY = pageHeight - borderBottomMargin - 6;
 
-  // Calculate required space for summary, notes and signature
+  // Calculate required space for summary, days completed line, notes and signature
   const requiredHeight =
     summaryBoxHeight +
+    7 +
     (hasNotes ? 8 + notesBlockHeight : 0) +
     8 +
     signBoxHeight;
@@ -529,35 +551,57 @@ doc.text(
     { align: 'right' }
   );
 
+  // Extra Charges
+  doc.text('Extra Charges:', totalsBoxX + 4, finalSummaryY + 18);
+
+  doc.text(
+    formatRs(data.ngst_extra_charges || 0),
+    totalsBoxX + totalsBoxWidth - 4,
+    finalSummaryY + 18,
+    { align: 'right' }
+  );
+
   // Divider
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
 
   doc.line(
     totalsBoxX + 4,
-    finalSummaryY + 15.5,
+    finalSummaryY + 23.5,
     totalsBoxX + totalsBoxWidth - 4,
-    finalSummaryY + 15.5
+    finalSummaryY + 23.5
   );
 
   // Total
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
 
-  doc.text('Total:', totalsBoxX + 4, finalSummaryY + 24.5);
+  doc.text('Total:', totalsBoxX + 4, finalSummaryY + 32.5);
 
   doc.text(
     formatRs(data.n_gst_total),
     totalsBoxX + totalsBoxWidth - 4,
-    finalSummaryY + 24.5,
+    finalSummaryY + 32.5,
     { align: 'right' }
   );
 
   // ==========================================
-  // NOTES BELOW FINANCIALS AND TOTALS
+  // DAYS COMPLETED BELOW FINANCIALS BLOCK
   // ==========================================
 
   let afterSummaryY = finalSummaryY + summaryBoxHeight;
+
+  const daysCompleted = calculateDaysCompleted(data.date);
+  const daysY = afterSummaryY + 6.5;
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text(`From Bill date : ${daysCompleted} Days completed`, margin, daysY);
+  afterSummaryY = daysY;
+
+  // ==========================================
+  // NOTES BELOW FINANCIALS AND TOTALS
+  // ==========================================
 
   if (hasNotes) {
     const notesY = afterSummaryY + 8;
